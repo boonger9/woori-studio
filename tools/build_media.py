@@ -100,10 +100,11 @@ def fetch_gospel(file_id):
 
 
 def build_gospel(weekly, media, manifest):
-    """weekly.json의 gospel: [{id, title}] → media/g-<id>-<쪽>.webp"""
-    for g in weekly.get("gospel", []):
+    """weekly.json의 gospel(복음송가)·art(설교그림): [{id, title}] → media/g-<id>-<쪽>.webp"""
+    items = [("복음송가", g) for g in weekly.get("gospel", [])] + [("설교그림", g) for g in weekly.get("art", [])]
+    for kind, g in items:
         fid, title = str(g.get("id", "")), g.get("title", "")
-        label = f"복음송가 {title or fid}"
+        label = f"{kind} {title or fid}"
         if not re.fullmatch(r"[-_A-Za-z0-9]{10,}", fid):
             manifest["missing"].append(label)
             print(f"::warning::{label}: 드라이브 파일 ID 형식이 아닙니다")

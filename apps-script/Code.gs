@@ -18,6 +18,7 @@ const CONFIG = {
   REVIEW_FOLDER_NAME: '주보pdf_검토',                        // 공개 폴더 '밖'에 둠
   MANUSCRIPT_ROOT_ID: '1aSimibEXebDadvWXjUZBaDnvsTofsu3Z',   // 생명의삶 (성경별 하위 폴더 포함)
   GOSPEL_FOLDER_ID: '1d3GKEymQU31452HXwA4QdVILwCMz9Z9m',     // 찬양/악보ppt (복음송가 송출용)
+  SERMON_ART_FOLDER_ID: '1viIZBiPjNNnYiaqiPQ6sDbh3XvdE-GK0', // 설교/설교그림 (설교 중 띄울 그림·PPT, 날짜별 하위 폴더)
   SITE_DATA_FOLDER_NAME: '홈페이지데이터',
   MAX_PDF_BYTES: 20 * 1024 * 1024,
   MAX_GOSPEL_BYTES: 35 * 1024 * 1024,
@@ -32,7 +33,8 @@ function doPost(e) {
     const handlers = {
       findManuscripts: findManuscripts_, getManuscript: getManuscript_,
       uploadBulletin: uploadBulletin_, publishBulletin: publishBulletin_, publishSermon: publishSermon_,
-      listGospel: listGospel_, getGospelFile: getGospelFile_,
+      listGospel: listGospel_, getGospelFile: getGospelFile_, getMediaFile: getGospelFile_,
+      listSermonArt: listSermonArt_,
       aiGenerate: aiGenerate_, updateWeekly: updateWeekly_, ping: () => ({ ok: true, now: new Date().toISOString() })
     };
     const h = handlers[req.action];
@@ -115,7 +117,8 @@ function updateWeekly_({ weekly }) {
     dates: (weekly.dates || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)),
     hymns: weekly.hymns.map(Number).filter(n => n >= 1 && n <= 645),
     responsive: (weekly.responsive || []).map(Number).filter(n => n >= 1 && n <= 137),
-    gospel: (weekly.gospel || []).filter(g => g && /^[-_A-Za-z0-9]{10,}$/.test(g.id)).map(g => ({ id: g.id, title: String(g.title || '').slice(0, 80) }))
+    gospel: (weekly.gospel || []).filter(g => g && /^[-_A-Za-z0-9]{10,}$/.test(g.id)).map(g => ({ id: g.id, title: String(g.title || '').slice(0, 80) })),
+    art: (weekly.art || []).filter(g => g && /^[-_A-Za-z0-9]{10,}$/.test(g.id)).map(g => ({ id: g.id, title: String(g.title || '').slice(0, 80) }))
   };
   const api = 'https://api.github.com/repos/boonger9/woori-studio/contents/weekly.json';
   const headers = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' };
@@ -147,10 +150,29 @@ function listGospel_() {
   return { ok: true, songs: out };
 }
 
-/** 복음송가 파일 하나를 base64로 돌려줌 (GitHub Actions가 그림으로 바꿀 때 사용). 찬양/악보ppt 폴더 안 파일만 허용 */
+/** 설교그림 폴더의 'YYYY-MM-DD'(또는 'YYMMDD') 하위 폴더 파일 목록 (이름순). 설교 중 띄울 그림·PPT */
+function listSermonArt_({ date }) {
+  const root = DriveApp.getFolderById(CONFIG.SERMON_ART_FOLDER_ID);
+  const names = [date, toYymmdd_(date)];
+  let folder = null;
+  for (const n of names) { const it = root.getFoldersByName(n); if (it.hasNext()) { folder = it.next(); break; } }
+  if (!folder) folder = root.createFolder(date); // 없으면 만들어 둠 → 목사님이 그림을 넣기만 하면 됨
+  const out = [];
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const f = files.next(), t = f.getMimeType();
+    if (/presentation|powerpoint|pdf|image\//.test(t))
+      out.push({ id: f.getId(), title: f.getName().replace(/\.(pptx?|pdf|jpe?g|png|webp|gif)$/i, ''), name: f.getName(), mimeType: t });
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+  return { ok: true, folderUrl: folder.getUrl(), files: out };
+}
+
+/** 그림으로 바꿀 파일 하나를 base64로 돌려줌 (GitHub Actions가 사용). 찬양/악보ppt·설교그림 폴더 안 파일만 허용 */
 function getGospelFile_({ fileId }) {
   const f = DriveApp.getFileById(fileId);
-  if (!isInside_(f, CONFIG.GOSPEL_FOLDER_ID)) throw new Error('찬양/악보ppt 폴더 밖의 파일은 받을 수 없습니다');
+  if (!isInside_(f, CONFIG.GOSPEL_FOLDER_ID) && !isInside_(f, CONFIG.SERMON_ART_FOLDER_ID))
+    throw new Error('찬양/악보ppt 또는 설교그림 폴더 밖의 파일은 받을 수 없습니다');
   let blob = f.getBlob(), name = f.getName();
   if (f.getMimeType() === MimeType.GOOGLE_SLIDES) { blob = f.getAs(MimeType.PDF); name = name + '.pdf'; }
   const bytes = blob.getBytes();
