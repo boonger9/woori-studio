@@ -6,6 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
+  collection, query, orderBy, limit, getDocs, where,
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 import {
   getDatabase, ref, onValue, set, onDisconnect, remove,
@@ -16,7 +17,7 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const rtdb = getDatabase(app);
 
-export { doc, getDoc, setDoc, onSnapshot, serverTimestamp, ref, onValue, set, onDisconnect, remove };
+export { doc, getDoc, setDoc, onSnapshot, serverTimestamp, collection, query, orderBy, limit, getDocs, where, ref, onValue, set, onDisconnect, remove };
 
 export function isAllowed(user) {
   return !!user && user.emailVerified && ALLOWED_EMAILS.includes((user.email || "").toLowerCase());

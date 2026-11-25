@@ -4,7 +4,10 @@
  *
  * 설치: script.google.com → 새 프로젝트 → 이 내용 붙여넣기
  *   → 서비스 +: Drive API 추가
- *   → 프로젝트 설정 → 스크립트 속성: STUDIO_SECRET (20자 이상 임의 문자열)
+ *   → 프로젝트 설정 → 스크립트 속성 3개:
+ *        STUDIO_SECRET  (20자 이상 임의 문자열, 예배 스튜디오 설정과 같은 값)
+ *        GEMINI_API_KEY (AI Studio 무료 키, 결제 연결 금지)
+ *        GITHUB_TOKEN   (woori-studio 저장소 Contents 읽기·쓰기 권한 토큰)
  *   → 배포 → 새 배포 → 웹 앱 (실행: 나 / 액세스: 모든 사용자) → URL 복사
  * GitHub 저장소 Secret에도 GAS_URL(웹 앱 주소)과 STUDIO_SECRET(같은 값)을 넣어야
  * 복음송가 악보를 자동으로 받아 올 수 있습니다.
@@ -29,7 +32,8 @@ function doPost(e) {
     const handlers = {
       findManuscripts: findManuscripts_, getManuscript: getManuscript_,
       uploadBulletin: uploadBulletin_, publishBulletin: publishBulletin_, publishSermon: publishSermon_,
-      listGospel: listGospel_, getGospelFile: getGospelFile_
+      listGospel: listGospel_, getGospelFile: getGospelFile_,
+      aiGenerate: aiGenerate_, updateWeekly: updateWeekly_, ping: () => ({ ok: true, now: new Date().toISOString() })
     };
     const h = handlers[req.action];
     if (!h) return json_({ ok: false, error: '알 수 없는 요청: ' + req.action });
@@ -37,6 +41,94 @@ function doPost(e) {
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
   }
+}
+
+/* ---------- AI (Gemini 무료 등급) ---------- */
+// 예배 스튜디오가 지침(system)과 원고(user)를 보내면 Gemini 결과(JSON 글자)를 돌려줍니다.
+// 무료로 쓸 수 있는 Flash 모델을 스스로 찾아 쓰고, 모델이 종료되면 다음 모델로 넘어갑니다.
+
+function aiGenerate_({ system, user }) {
+  const props = PropertiesService.getScriptProperties();
+  const key = props.getProperty('GEMINI_API_KEY');
+  if (!key) throw new Error('스크립트 속성에 GEMINI_API_KEY가 없습니다');
+  if (!user || user.length < 200) throw new Error('원고가 너무 짧습니다');
+  const tried = [];
+  const models = candidateModels_(key);
+  for (const model of models) {
+    const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/' + model + ':generateContent', {
+      method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': key }, muteHttpExceptions: true,
+      payload: JSON.stringify({
+        systemInstruction: { parts: [{ text: system || '' }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.4 }
+      })
+    });
+    const code = res.getResponseCode();
+    if (code === 200) {
+      const cand = (JSON.parse(res.getContentText()).candidates || [])[0];
+      const text = cand && cand.content && cand.content.parts ? cand.content.parts.map(p => p.text || '').join('') : '';
+      if (!text) throw new Error('Gemini가 빈 답을 보냈습니다 (안전 필터 등)');
+      props.setProperty('GEMINI_MODEL_OK', model);
+      return { ok: true, model: model, text: text };
+    }
+    tried.push(model + ':' + code);
+    if (code === 429) throw new Error('오늘 무료 사용량을 다 썼거나 잠시 너무 많이 불렀습니다. 잠시 후 다시 시도하거나 [프롬프트 복사]로 진행하세요');
+    if (code === 400 || code === 401 || code === 403) {
+      const msg = res.getContentText().slice(0, 200);
+      if (/API key|PERMISSION|billing/i.test(msg)) throw new Error('Gemini 키 문제: ' + msg);
+    }
+    // 404 등은 모델이 없어진 것 → 다음 모델 시도
+  }
+  props.deleteProperty('GEMINI_MODEL_OK');
+  throw new Error('쓸 수 있는 Gemini 모델을 찾지 못했습니다: ' + tried.join(', '));
+}
+
+/** 정식 버전 Flash 모델을 최신순으로 (마지막 성공 모델을 맨 앞에) */
+function candidateModels_(key) {
+  const ok = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK');
+  let list = [];
+  try {
+    const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200',
+      { headers: { 'x-goog-api-key': key }, muteHttpExceptions: true });
+    if (res.getResponseCode() === 200) {
+      list = (JSON.parse(res.getContentText()).models || [])
+        .filter(m => (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0)
+        .map(m => m.name)
+        .filter(n => /flash/i.test(n) && !/(preview|exp|image|tts|live|audio|thinking|embedding|8b)/i.test(n));
+      list.sort((a, b) => verOf_(b) - verOf_(a) || (/lite/.test(a) ? 1 : 0) - (/lite/.test(b) ? 1 : 0));
+    }
+  } catch (e) { /* 목록을 못 받으면 아래 기본값 사용 */ }
+  if (ok) list = [ok].concat(list.filter(n => n !== ok));
+  if (!list.length) list = ['models/gemini-flash-latest'];
+  return list.slice(0, 6);
+}
+function verOf_(name) { const m = name.match(/(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; }
+
+/* ---------- 이번 주 악보 목록(weekly.json) 갱신 → GitHub가 자동으로 악보 그림을 만들어 배포 ---------- */
+
+function updateWeekly_({ weekly }) {
+  const token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
+  if (!token) throw new Error('스크립트 속성에 GITHUB_TOKEN이 없습니다');
+  if (!weekly || !Array.isArray(weekly.hymns)) throw new Error('weekly 형식이 잘못되었습니다');
+  const clean = {
+    note: '주간 준비 화면이 자동으로 고친 파일입니다. 여기 있는 곡만 그림으로 바꿔 웹사이트에 올립니다.',
+    dates: (weekly.dates || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)),
+    hymns: weekly.hymns.map(Number).filter(n => n >= 1 && n <= 645),
+    responsive: (weekly.responsive || []).map(Number).filter(n => n >= 1 && n <= 137),
+    gospel: (weekly.gospel || []).filter(g => g && /^[-_A-Za-z0-9]{10,}$/.test(g.id)).map(g => ({ id: g.id, title: String(g.title || '').slice(0, 80) }))
+  };
+  const api = 'https://api.github.com/repos/boonger9/woori-studio/contents/weekly.json';
+  const headers = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' };
+  const cur = UrlFetchApp.fetch(api, { headers: headers, muteHttpExceptions: true });
+  const sha = cur.getResponseCode() === 200 ? JSON.parse(cur.getContentText()).sha : undefined;
+  const content = Utilities.base64Encode(Utilities.newBlob(JSON.stringify(clean, null, 2) + '\n').getBytes());
+  const res = UrlFetchApp.fetch(api, {
+    method: 'put', headers: headers, contentType: 'application/json', muteHttpExceptions: true,
+    payload: JSON.stringify({ message: '이번 주 악보 목록 갱신 (' + clean.dates.join(', ') + ')', content: content, sha: sha })
+  });
+  const code = res.getResponseCode();
+  if (code !== 200 && code !== 201) throw new Error('GitHub 저장 실패 ' + code + ': ' + res.getContentText().slice(0, 200));
+  return { ok: true, weekly: clean };
 }
 
 /* ---------- 복음송가 (찬양/악보ppt 폴더) ---------- */
