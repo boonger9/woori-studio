@@ -41,6 +41,9 @@ import { requireLogin } from "./js/firebase.js";
 import { mountStage, slideLabel } from "./js/render.js";
 import { watchDeck, expandItems, sectionsOf } from "./js/deck.js";
 import { createLive, clamp, keepAwake, watchDisplayPresence } from "./js/live.js";
+import { loadManifest } from "./js/media.js";
+
+const manifest = await loadManifest(); // 이번 주 악보 PPT 그림 목록
 
 const $ = (id) => document.getElementById(id);
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(15); } catch (e) {} };
@@ -72,7 +75,7 @@ requireLogin($("gate"), () => {
     deckId = id;
     if (unwatch) unwatch();
     unwatch = watchDeck(id, (deck) => {
-      slides = deck ? expandItems(deck.items) : [];
+      slides = deck ? expandItems(deck.items, manifest) : [];
       $("secs").innerHTML = sectionsOf(slides).map((s) => `<button data-i="${s.index}">${s.label.replace(/</g, "&lt;")}</button>`).join("");
       render();
     });

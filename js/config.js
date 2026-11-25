@@ -19,6 +19,3 @@ export const CHURCH = {
   logo: "assets/logo.png",
 };
 
-// 새찬송가 악보 이미지 (boonger9/church-hymns 저장소)
-export const hymnImage = (no) =>
-  `https://raw.githubusercontent.com/boonger9/church-hymns/main/hymn_${String(no).padStart(3, "0")}.jpg`;

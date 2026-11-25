@@ -1,0 +1,85 @@
+name: 예배 스튜디오 배포
+
+# 코드나 weekly.json이 바뀌면 자동 실행. Actions 탭에서 손으로 실행할 수도 있음.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HAS_TOKEN: ${{ secrets.HYMN_REPO_TOKEN != '' }}
+    steps:
+      - name: 예배 스튜디오 코드 받기
+        uses: actions/checkout@v4
+
+      - name: 이번 주 필요한 악보 PPT 목록 만들기
+        id: list
+        run: |
+          {
+            echo "patterns<<__END__"
+            python3 tools/sparse_patterns.py weekly.json
+            echo "__END__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 비공개 악보 저장소에서 이번 주 파일만 받기
+        if: env.HAS_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: boonger9/woori-hymnppt
+          token: ${{ secrets.HYMN_REPO_TOKEN }}
+          path: _hymnlib
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: ${{ steps.list.outputs.patterns }}
+
+      - name: 변환 도구 설치 (LibreOffice, 한글 글꼴)
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-impress fonts-nanum fonts-noto-cjk poppler-utils
+          sudo fc-cache -f
+          pip install pillow
+
+      - name: 웹사이트 폴더 만들기
+        run: |
+          mkdir -p _site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' --exclude '_hymnlib' --exclude 'tools' ./ _site/
+
+      - name: 악보 PPT → 그림 변환
+        if: env.HAS_TOKEN == 'true'
+        run: python3 tools/build_media.py weekly.json _hymnlib _site
+
+      - name: 토큰이 없을 때 안내
+        if: env.HAS_TOKEN != 'true'
+        run: |
+          mkdir -p _site/media
+          echo '{"hymns":{},"responsive":{},"missing":["HYMN_REPO_TOKEN 비밀값이 없어 악보를 만들지 못했습니다"]}' > _site/media/manifest.json
+          echo "::warning::HYMN_REPO_TOKEN 비밀값이 없어 악보 그림 없이 배포합니다."
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

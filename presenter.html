@@ -52,6 +52,9 @@ import { requireLogin } from "./js/firebase.js";
 import { mountStage, preloadSlides, slideLabel } from "./js/render.js";
 import { watchDeck, expandItems, sectionsOf, saveDeck, nextSunday, sampleDeck, stressDeck } from "./js/deck.js";
 import { createLive, clamp, keepAwake } from "./js/live.js";
+import { loadManifest } from "./js/media.js";
+
+const manifest = await loadManifest(); // 이번 주 악보 PPT 그림 목록
 
 const $ = (id) => document.getElementById(id);
 function toast(msg, isErr) {
@@ -62,6 +65,7 @@ function toast(msg, isErr) {
 
 requireLogin($("gate"), (user) => {
   $("app").hidden = false;
+  if (manifest.missing && manifest.missing.length) toast("준비되지 않은 악보: " + manifest.missing.join(", "), true);
   const live = createLive({ canWrite: true, who: "presenter-" + Math.random().toString(36).slice(2, 7) });
   const drawCur = mountStage($("cur"));
   const drawNext = mountStage($("next"));
@@ -98,7 +102,7 @@ requireLogin($("gate"), (user) => {
     $("date").value = id;
     if (unwatch) unwatch();
     unwatch = watchDeck(id, (deck, src) => {
-      slides = deck ? expandItems(deck.items) : [];
+      slides = deck ? expandItems(deck.items, manifest) : [];
       $("make-sample").hidden = $("make-stress").hidden = !!deck;
       if (!deck && src === "missing") toast(`${id} 예배 슬라이드가 아직 없습니다. 시험하려면 '샘플 예배 만들기'를 누르세요.`);
       renderList(); render();

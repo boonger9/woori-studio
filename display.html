@@ -18,6 +18,9 @@
 import { mountStage, preloadSlides } from "./js/render.js";
 import { watchDeck, expandItems } from "./js/deck.js";
 import { createLive, announceDisplay, keepAwake } from "./js/live.js";
+import { loadManifest } from "./js/media.js";
+
+const manifest = await loadManifest(); // 이번 주 악보 PPT 그림 목록
 
 const draw = mountStage(document.getElementById("screen"));
 const params = new URLSearchParams(location.search);
@@ -41,7 +44,7 @@ function useDeck(id) {
   deckId = id;
   if (unwatch) unwatch();
   unwatch = watchDeck(id, (deck) => {
-    slides = deck ? expandItems(deck.items) : [];
+    slides = deck ? expandItems(deck.items, manifest) : [];
     preloadSlides(slides);           // 이미지를 미리 모두 받아 둠
     render();
   }, (err) => console.warn("덱 읽기 오류", err));

@@ -29,14 +29,14 @@ function slideHTML(s) {
         <div class="x-head"><span>${esc(s.title || s.section || "")}</span><span class="x-page">${esc(s.page || "")}</span></div>
         <div class="x-body fit" data-max="76" data-min="40">${nl(s.body)}</div></div>`;
     case "hymn":
-      if (s.lyrics) {
-        return `<div class="sl sl-text">
-          <div class="x-head"><span>${s.no ? `${s.no}장 ` : ""}${esc(s.title)}</span><span class="x-page">${esc(s.page || "")}</span></div>
-          <div class="x-body fit" data-max="80" data-min="44">${nl(s.lyrics)}</div></div>`;
-      }
-      return `<div class="sl sl-hymn">
-        <div class="h-head"><b>${s.no ? `${s.no}장` : ""}</b> ${esc(s.title)} ${s.note ? `<em>${esc(s.note)}</em>` : ""}</div>
-        <div class="h-img"><img src="${esc(s.image)}" alt="${esc(s.no)}장 악보" loading="eager"></div></div>`;
+    case "responsive":
+      // 악보 PPT·교독문 PPT 그림 (4:3)을 검은 바탕 가운데에
+      return `<div class="sl sl-image"><img src="${esc(s.image)}" alt="${esc(slideLabel(s))}"></div>`;
+    case "missing":
+      return `<div class="sl sl-title">
+        <div class="t-section">${esc(s.section || "")}</div>
+        <div class="t-main fit" data-max="110" data-min="56">${esc(s.title || "")}</div>
+        <div class="t-note">⚠ ${esc(s.message)}</div></div>`;
     case "image":
       return `<div class="sl sl-image"><img src="${esc(s.image)}" alt=""></div>`;
     default:
@@ -98,6 +98,8 @@ export function preloadSlides(slides) {
 export function slideLabel(s) {
   if (!s) return "";
   if (s.type === "hymn") return `${s.no ? s.no + "장 " : ""}${s.title || ""}${s.page ? " (" + s.page + ")" : ""}`;
+  if (s.type === "responsive") return `교독문 ${s.no}번 ${s.title || ""}${s.page ? " (" + s.page + ")" : ""}`;
+  if (s.type === "missing") return `⚠ ${s.message}`;
   if (s.type === "logo") return "교회 로고";
   if (s.type === "black") return "검은 화면";
   return `${s.title || s.section || ""}${s.page ? " (" + s.page + ")" : ""}`;

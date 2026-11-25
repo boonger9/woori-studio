@@ -20,13 +20,21 @@
 - 키보드/무선 클리커: → PageDown Space Enter(다음), ← PageUp Backspace(이전), B 또는 .(검은 화면), L(로고), Home/End
 - 예배 도중 발표자 화면을 새로 고쳐도 송출 위치가 유지됨
 
+## 찬송·교독문 악보 PPT (A 방식: 그 주 곡만 공개)
+- 645곡 악보 PPT와 교독문 137편은 **비공개 저장소 `woori-hymnppt`에만** 있습니다.
+- `weekly.json`에 적힌 번호만 GitHub Actions가 배포할 때 그림(webp)으로 바꿔 `media/`에 넣습니다.
+- 그림은 git 기록에 남지 않으므로, 다음 배포 때 목록에서 빠진 곡은 웹에서 완전히 사라집니다.
+- 필요한 설정: 저장소 Secret `HYMN_REPO_TOKEN` (woori-hymnppt 읽기 권한이 있는 GitHub 토큰), Pages Source를 **GitHub Actions**로.
+- "1절만"은 기존 PPT 엔진과 같은 규칙으로 앞 2장만 띄웁니다.
+
 ## 처음 설정 (한 번만)
 1. **Firebase 보안 규칙 게시**
    - Firestore Database → 규칙 → `firestore.rules` 내용 붙여넣기 → 게시
    - Realtime Database → 규칙 → `database.rules.json` 내용 붙여넣기 → 게시
 2. **로그인 허용 주소 추가**: Authentication → 설정 → 승인된 도메인 → `boonger9.github.io` 추가
-3. **GitHub Pages 켜기**: 저장소 Settings → Pages → Source: Deploy from a branch → `main` / `(root)` → Save
-4. 접속: `https://boonger9.github.io/woori-studio/`
+3. **GitHub Pages 켜기**: 저장소 Settings → Pages → Source: **GitHub Actions**
+4. **악보 토큰 넣기**: Settings → Secrets and variables → Actions → `HYMN_REPO_TOKEN`
+5. 접속: `https://boonger9.github.io/woori-studio/`
 
 ## 계정 추가 (방송 담당자 등)
 아래 세 곳에 같은 이메일을 넣어야 합니다.

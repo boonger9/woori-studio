@@ -1,6 +1,6 @@
 // 예배 슬라이드 묶음(덱) 데이터: 불러오기, 저장, 자동 분할, 샘플
 import { db, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "./firebase.js";
-import { hymnImage } from "./config.js";
+import { hymnPages, responsivePages } from "./media.js";
 
 /*
  덱 구조 (Firestore: decks/{YYYY-MM-DD})
@@ -46,8 +46,10 @@ export function paginateBody(body) {
   return pages.map((p) => p.join("\n").trim()).filter(Boolean);
 }
 
-/** items → slides (자동 분할 포함) */
-export function expandItems(items = []) {
+const isFirstVerseOnly = (it) => it.firstVerseOnly === true || /1절만/.test(it.note || "");
+
+/** items → slides (자동 분할 포함). manifest: 이번 주 악보 PPT 그림 목록 */
+export function expandItems(items = [], manifest = { hymns: {}, responsive: {} }) {
   const slides = [];
   items.forEach((it, i) => {
     const base = { section: it.section || "", itemIndex: i };
@@ -59,11 +61,25 @@ export function expandItems(items = []) {
       return;
     }
     if (it.type === "hymn") {
-      const pages = it.lyrics ? paginateBody(it.lyrics) : [null];
-      pages.forEach((lyrics, p) =>
-        slides.push({ ...base, type: "hymn", no: it.no, title: it.title || "", note: it.note || "",
-          lyrics, image: lyrics ? null : (it.image || hymnImage(it.no)),
-          page: pages.length > 1 ? `${p + 1}/${pages.length}` : "" }));
+      const pages = hymnPages(manifest, it.no, isFirstVerseOnly(it));
+      if (!pages.length) {
+        slides.push({ ...base, type: "missing", no: it.no, title: it.title || "",
+          message: `${it.no}장 악보 PPT가 아직 준비되지 않았습니다` });
+        return;
+      }
+      pages.forEach((image, p) => slides.push({ ...base, type: "hymn", no: it.no, title: it.title || "",
+        note: it.note || "", image, page: `${p + 1}/${pages.length}` }));
+      return;
+    }
+    if (it.type === "responsive") {
+      const pages = responsivePages(manifest, it.no);
+      if (!pages.length) {
+        slides.push({ ...base, type: "missing", no: it.no, title: it.title || "",
+          message: `교독문 ${it.no}번이 아직 준비되지 않았습니다` });
+        return;
+      }
+      pages.forEach((image, p) => slides.push({ ...base, type: "responsive", no: it.no, title: it.title || "",
+        image, page: `${p + 1}/${pages.length}` }));
       return;
     }
     slides.push({ ...base, ...it });
@@ -129,7 +145,7 @@ export function sampleDeck(date) {
       { section: "묵도기원", type: "hymn", no: 257, title: "마음에 가득한 의심을 깨치고" },
       { section: "묵도기원", type: "hymn", no: 259, title: "예수 십자가에 흘린 피로써" },
       { section: "찬송", type: "hymn", no: 4, title: "성부 성자와 성령", note: "1절만" },
-      { section: "성시교독", type: "title", title: "성시교독", subtitle: "115. 구주 강림(1)", note: "교독문 본문은 2단계에서 자동으로 들어갑니다" },
+      { section: "성시교독", type: "responsive", no: 115, title: "구주 강림(1)" },
       { section: "신앙고백", type: "title", title: "신앙고백", subtitle: "사도신경" },
       { section: "설교 전 찬송", type: "hymn", no: 258, title: "샘물과 같은 보혈은" },
       { section: "대표기도", type: "title", title: "대표기도", subtitle: "○○○ 장로" },
