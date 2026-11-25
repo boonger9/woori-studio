@@ -1,5 +1,6 @@
 // 주간 준비: 이름 가리기, AI 결과 읽기, 예배 순서(슬라이드) 만들기
 import { APOSTLES_CREED, CLOSING_HYMN, COMMUNION_HYMN } from "./fixed.js";
+import { sermonItems } from "./sermon.js";
 
 /* ---------- 찬송가·교독문 제목 ---------- */
 let catalog = null;
@@ -116,6 +117,7 @@ function buildSundayItems(w) {
   if (w.hymnBefore && w.hymnBefore.no) items.push(H("설교 전 찬송", w.hymnBefore.no));
   items.push({ section: "대표기도", type: "title", title: "대표기도", subtitle: w.prayer || "" });
   items.push({ section: "말씀", type: "title", title: w.sermonTitle || "말씀", subtitle: [w.passage, w.preacher].filter(Boolean).join(" · ") });
+  items.push(...sermonItems(w.sermonSlides, "말씀"));   // 설교 중 화면 (구절·그림, 원고 순서)
   if (w.offertory && w.offertory.no) items.push(H("봉헌", w.offertory.no));
   if (w.isCommunion) {
     items.push({ section: "성찬", type: "title", title: "성찬식" });
@@ -138,6 +140,7 @@ function buildPraiseItems(w) {
   items.push({ section: "대표기도", type: "title", title: "대표기도", subtitle: w.prayer || "" });
   if (w.passage) items.push({ section: "성경봉독", type: "title", title: "성경봉독", subtitle: w.passage });
   items.push({ section: "설교", type: "title", title: w.sermonTitle || "말씀", subtitle: [w.passage, w.preacher].filter(Boolean).join(" · ") });
+  items.push(...sermonItems(w.sermonSlides, "설교"));
   if (w.gospelAfter && w.gospelAfter.id) items.push({ section: "설교 후 찬양", type: "gospel", id: w.gospelAfter.id, title: w.gospelAfter.title });
   items.push({ section: "축도", type: "title", title: "축도", subtitle: w.preacher || "" });
   items.push({ section: "예배 후", type: "logo" });
@@ -149,5 +152,6 @@ export function mediaNeeds(items) {
   const hymns = [...new Set(items.filter((i) => i.type === "hymn").map((i) => i.no))];
   const responsive = [...new Set(items.filter((i) => i.type === "responsive").map((i) => i.no))];
   const gospel = items.filter((i) => i.type === "gospel").map((i) => ({ id: i.id, title: i.title }));
-  return { hymns, responsive, gospel };
+  const art = items.filter((i) => i.type === "art").map((i) => ({ id: i.id, title: i.title }));
+  return { hymns, responsive, gospel, art };
 }

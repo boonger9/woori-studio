@@ -158,6 +158,9 @@ body.remote { background: #0f1523; color: #e8ecf5; min-height: 100vh; overscroll
 .rm-secs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; align-content: start; flex-wrap: wrap; }
 .rm-secs button { flex: none; background: #1c2540; color: #e8ecf5; border: 1px solid #2b3755; border-radius: 999px; padding: 8px 14px; font-size: 15px; }
 .rm-secs button.cur { background: var(--blue); border-color: var(--blue); }
+.rm-sermon { background: #151c30; border: 1px solid #2b3755; border-radius: 14px; padding: 10px 12px; color: #e8ecf5; }
+.rm-sermon summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
+.rm-sermon .rm-secs { margin-top: 8px; max-height: 40vh; overflow: auto; }
 .rm-pad { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
 .rm-pad .btn { padding: 30px 10px; font-size: 24px; border-radius: 18px; background: #222c45; color: #fff; border-color: #2b3755; }
 .rm-pad .btn.next { background: var(--blue); border-color: var(--blue); font-size: 30px; }

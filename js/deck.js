@@ -56,7 +56,7 @@ const isFirstVerseOnly = (it) => it.firstVerseOnly === true || /1절만/.test(it
 export function expandItems(items = [], manifest = { hymns: {}, responsive: {} }) {
   const slides = [];
   items.forEach((it, i) => {
-    const base = { section: it.section || "", itemIndex: i };
+    const base = { section: it.section || "", itemIndex: i, ...(it.sermon ? { sermon: true } : {}) };
     if (it.type === "text" && it.body) {
       const pages = paginateBody(it.body);
       pages.forEach((body, p) =>
@@ -84,6 +84,17 @@ export function expandItems(items = [], manifest = { hymns: {}, responsive: {} }
       }
       pages.forEach((image, p) => slides.push({ ...base, type: "gospel", id: it.id, title: it.title || "",
         image, page: `${p + 1}/${pages.length}` }));
+      return;
+    }
+    if (it.type === "art") {   // 설교 그림 (원고 그림·설교그림 폴더 파일)
+      const pages = gospelPages(manifest, it.id);
+      if (!pages.length) {
+        slides.push({ ...base, type: "missing", title: it.title || "",
+          message: `'${it.title || "설교 그림"}'이 아직 준비되지 않았습니다` });
+        return;
+      }
+      pages.forEach((image, p) => slides.push({ ...base, type: "image", id: it.id, title: it.title || "",
+        image, page: pages.length > 1 ? `${p + 1}/${pages.length}` : "" }));
       return;
     }
     if (it.type === "responsive") {

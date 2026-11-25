@@ -24,6 +24,10 @@
     <div><div class="cap">다음</div><div id="next"></div></div>
   </div>
   <div class="rm-secs" id="secs" aria-label="순서 바로가기"></div>
+  <details class="rm-sermon" id="sermon-box" hidden>
+    <summary>설교 중 화면 바로가기 <span id="sermon-n"></span></summary>
+    <div class="rm-secs" id="sermon" aria-label="설교 중 화면 바로가기"></div>
+  </details>
   <div style="display:grid; gap:10px">
     <div class="rm-modes">
       <button class="btn" id="m-black">검은 화면</button>
@@ -68,6 +72,7 @@ requireLogin($("gate"), () => {
     const secs = sectionsOf(slides);
     let curSec = -1; secs.forEach((sec, k) => { if (sec.index <= i) curSec = k; });
     document.querySelectorAll("#secs button").forEach((b, k) => b.classList.toggle("cur", k === curSec));
+    document.querySelectorAll("#sermon button").forEach((b) => b.classList.toggle("cur", +b.dataset.i === i));
   }
 
   function useDeck(id) {
@@ -77,6 +82,11 @@ requireLogin($("gate"), () => {
     unwatch = watchDeck(id, (deck) => {
       slides = deck ? expandItems(deck.items, manifest) : [];
       $("secs").innerHTML = sectionsOf(slides).map((s) => `<button data-i="${s.index}">${s.label.replace(/</g, "&lt;")}</button>`).join("");
+      // 설교 중 화면(구절·그림)은 한 장씩 바로 갈 수 있게
+      const ser = slides.map((s, i) => ({ s, i })).filter((x) => x.s.sermon);
+      $("sermon-box").hidden = !ser.length;
+      $("sermon-n").textContent = ser.length ? `(${ser.length})` : "";
+      $("sermon").innerHTML = ser.map(({ s, i }) => `<button data-i="${i}">${(s.type === "image" ? "🖼 " : "") + String(s.title || "").replace(/</g, "&lt;")}${s.page ? " " + s.page : ""}</button>`).join("");
       render();
     });
   }
@@ -103,6 +113,7 @@ requireLogin($("gate"), () => {
   $("m-black").onclick = () => toggle("black");
   $("m-logo").onclick = () => toggle("logo");
   $("secs").onclick = (e) => { const b = e.target.closest("button"); if (b) go({ index: +b.dataset.i, mode: "slide" }); };
+  $("sermon").onclick = $("secs").onclick;
   keepAwake();
 });
 </script>

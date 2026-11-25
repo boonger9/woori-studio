@@ -152,11 +152,7 @@ function listGospel_() {
 
 /** 설교그림 폴더의 'YYYY-MM-DD'(또는 'YYMMDD') 하위 폴더 파일 목록 (이름순). 설교 중 띄울 그림·PPT */
 function listSermonArt_({ date }) {
-  const root = DriveApp.getFolderById(CONFIG.SERMON_ART_FOLDER_ID);
-  const names = [date, toYymmdd_(date)];
-  let folder = null;
-  for (const n of names) { const it = root.getFoldersByName(n); if (it.hasNext()) { folder = it.next(); break; } }
-  if (!folder) folder = root.createFolder(date); // 없으면 만들어 둠 → 목사님이 그림을 넣기만 하면 됨
+  const folder = sermonArtFolder_(date);
   const out = [];
   const files = folder.getFiles();
   while (files.hasNext()) {
@@ -166,6 +162,13 @@ function listSermonArt_({ date }) {
   }
   out.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
   return { ok: true, folderUrl: folder.getUrl(), files: out };
+}
+
+/** 설교그림/날짜 폴더 (없으면 만듦) */
+function sermonArtFolder_(date) {
+  const root = DriveApp.getFolderById(CONFIG.SERMON_ART_FOLDER_ID);
+  for (const n of [date, toYymmdd_(date)]) { const it = root.getFoldersByName(n); if (it.hasNext()) return it.next(); }
+  return root.createFolder(date);
 }
 
 /** 그림으로 바꿀 파일 하나를 base64로 돌려줌 (GitHub Actions가 사용). 찬양/악보ppt·설교그림 폴더 안 파일만 허용 */
@@ -214,7 +217,7 @@ function findManuscripts_({ date }) {
   return { ok: true, target, candidates: all.slice(0, 10) };
 }
 
-function getManuscript_({ fileId, tabTitle }) {
+function getManuscript_({ fileId, tabTitle, date }) {
   const doc = DocumentApp.openById(fileId);
   const tabs = [];
   const flatten = (list) => list.forEach(t => { tabs.push(t); flatten(t.getChildTabs()); });
@@ -223,8 +226,55 @@ function getManuscript_({ fileId, tabTitle }) {
   if (!tabTitle) return { ok: true, title: doc.getName(), tabs: titles };
   const tab = tabs.find(t => t.getTitle() === tabTitle);
   if (!tab) throw new Error('탭을 찾지 못했습니다: ' + tabTitle);
-  return { ok: true, title: doc.getName(), tab: tabTitle, tabs: titles,
-           text: tab.asDocumentTab().getBody().getText() };
+  const body = tab.asDocumentTab().getBody();
+  const out = { ok: true, version: 2, title: doc.getName(), tab: tabTitle, tabs: titles, text: body.getText() };
+  if (date) Object.assign(out, manuscriptFlow_(body, date));
+  return out;
+}
+
+/**
+ * 원고를 위에서 아래로 읽으며 글과 그림의 순서를 기록.
+ * 그림 자리에는 [[그림:번호]] 표시를 남기고, 그림 파일은 설교그림/날짜 폴더에 '원고그림-01.png'처럼 저장.
+ * (다시 불러오면 예전 '원고그림-' 파일은 휴지통으로 보내고 새로 저장)
+ */
+function manuscriptFlow_(body, date) {
+  const lines = [], blobs = [];
+  const T = DocumentApp.ElementType;
+  const walk = (el) => {
+    const type = el.getType();
+    if (type === T.INLINE_IMAGE) { blobs.push(el.asInlineImage().getBlob()); lines.push('[[그림:' + blobs.length + ']]'); return; }
+    if (type === T.PARAGRAPH || type === T.LIST_ITEM) {
+      const p = type === T.PARAGRAPH ? el.asParagraph() : el.asListItem();
+      let text = '';
+      const flush = () => { if (text.trim()) lines.push(text); text = ''; };
+      for (let i = 0; i < p.getNumChildren(); i++) {
+        const c = p.getChild(i);
+        if (c.getType() === T.TEXT) text += c.asText().getText();
+        else if (c.getType() === T.INLINE_IMAGE) { flush(); walk(c); }
+      }
+      flush();
+      try { p.getPositionedImages().forEach(img => { blobs.push(img.getBlob()); lines.push('[[그림:' + blobs.length + ']]'); }); } catch (e) {}
+      return;
+    }
+    if (typeof el.getNumChildren === 'function') {
+      for (let i = 0; i < el.getNumChildren(); i++) walk(el.getChild(i));
+      return;
+    }
+    if (typeof el.getText === 'function') { const t = el.getText(); if (t && t.trim()) lines.push(t); }
+  };
+  for (let i = 0; i < body.getNumChildren(); i++) walk(body.getChild(i));
+
+  const folder = sermonArtFolder_(date);
+  const old = folder.getFiles();
+  while (old.hasNext()) { const f = old.next(); if (/^원고그림-/.test(f.getName())) f.setTrashed(true); }
+  const art = blobs.map((b, k) => {
+    const type = b.getContentType() || 'image/png';
+    const ext = /jpe?g/.test(type) ? '.jpg' : /gif/.test(type) ? '.gif' : '.png';
+    const name = '원고그림-' + String(k + 1).padStart(2, '0') + ext;
+    const f = folder.createFile(b.setName(name));
+    return { n: k + 1, id: f.getId(), name: name };
+  });
+  return { flow: lines.join('\n'), art: art, artFolderUrl: folder.getUrl() };
 }
 
 /* ---------- 주보 PDF ---------- */
