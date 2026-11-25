@@ -121,7 +121,7 @@ body.presenter { background: #0f1523; color: #e8ecf5; height: 100vh; overflow: h
 .pr-top .btn.primary { background: var(--blue); border-color: var(--blue); }
 .pr-main { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; padding: 14px; min-height: 0; }
 .pr-cur, .pr-side { display: grid; gap: 10px; min-height: 0; }
-.pr-cur { grid-template-rows: auto 1fr; }
+.pr-cur { grid-template-rows: auto 1fr auto; }
 .pr-side { grid-template-rows: auto auto auto 1fr; }
 .pr-label { font-size: 14px; color: #8f9bb8; display: flex; justify-content: space-between; }
 .pr-cur .stage-wrap { border-radius: 10px; outline: 3px solid #e0483e; }
@@ -137,6 +137,20 @@ body.presenter { background: #0f1523; color: #e8ecf5; height: 100vh; overflow: h
 .pr-list button.cur { background: var(--blue); }
 .pr-list .no { color: #8f9bb8; width: 34px; flex: none; text-align: right; }
 .pr-list button.cur .no { color: #fff; }
+.pr-list button.sub { padding: 4px 10px 4px 10px; font-size: 13px; color: #b9c3da; }
+.pr-list button.sub span:last-child { padding-left: 14px; }
+.pr-list button.vs { font-weight: 700; color: #fff; border-top: 1px solid #2b3755; border-radius: 0 0 8px 8px; }
+.pr-list button.rf span:last-child { color: #f0c36a; }
+.pr-list button.cur span:last-child { color: #fff; }
+.pr-strip-wrap { display: grid; gap: 6px; }
+.pr-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; }
+.pr-strip button { flex: none; width: 150px; padding: 0; border: 2px solid #2b3755; border-radius: 8px; background: #0f1523; color: #e8ecf5; cursor: pointer; overflow: hidden; display: grid; }
+.pr-strip img { width: 100%; aspect-ratio: 4/3; object-fit: contain; background: #000; display: block; }
+.pr-strip span { font-size: 13px; padding: 4px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.pr-strip button.vs { border-color: #5b6b94; }
+.pr-strip button.vs span { font-weight: 700; }
+.pr-strip button.rf span { color: #f0c36a; }
+.pr-strip button.cur { border-color: #e0483e; box-shadow: 0 0 0 2px #e0483e; }
 .pr-bottom { display: flex; gap: 10px; padding: 10px 14px 14px; }
 .pr-bottom .btn { flex: 1; padding: 16px; font-size: 20px; background: #222c45; color: #fff; border-color: #2b3755; }
 .pr-bottom .btn.next { flex: 2; background: var(--blue); border-color: var(--blue); }
@@ -145,7 +159,8 @@ body.presenter { background: #0f1523; color: #e8ecf5; height: 100vh; overflow: h
 
 /* ---------- 폰 리모컨 ---------- */
 body.remote { background: #0f1523; color: #e8ecf5; min-height: 100vh; overscroll-behavior: none; }
-.rm { display: grid; gap: 12px; padding: 12px 12px calc(16px + env(safe-area-inset-bottom)); min-height: 100vh; grid-template-rows: auto auto auto 1fr auto; }
+.rm { display: flex; flex-direction: column; gap: 12px; padding: 12px 12px calc(16px + env(safe-area-inset-bottom)); min-height: 100vh; }
+.rm > :last-child { margin-top: auto; } /* 이전·다음 버튼은 늘 맨 아래 */
 .rm-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .rm-top .pill { background: #1c2540; color: #b9c3dc; }
 .rm-top .pill.ok { background: #12392a; color: #6ee7a8; }
@@ -158,6 +173,19 @@ body.remote { background: #0f1523; color: #e8ecf5; min-height: 100vh; overscroll
 .rm-secs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; align-content: start; flex-wrap: wrap; }
 .rm-secs button { flex: none; background: #1c2540; color: #e8ecf5; border: 1px solid #2b3755; border-radius: 999px; padding: 8px 14px; font-size: 15px; }
 .rm-secs button.cur { background: var(--blue); border-color: var(--blue); }
+.rm-song { display: grid; gap: 8px; align-content: start; background: #151c30; border: 1px solid #2b3755; border-radius: 14px; padding: 10px; }
+.rm-song .cap { font-size: 13px; color: #8f9bb8; }
+.rm-vbtns { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 8px; }
+.rm-vbtns button { padding: 14px 6px; font-size: 18px; font-weight: 700; border-radius: 12px; background: #222c45; color: #fff; border: 1px solid #2b3755; }
+.rm-vbtns button.rf { color: #f0c36a; }
+.rm-vbtns button.cur { background: var(--blue); border-color: var(--blue); color: #fff; }
+.rm-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.rm-strip button { flex: none; width: 120px; padding: 0; border: 2px solid #2b3755; border-radius: 8px; background: #0f1523; color: #e8ecf5; overflow: hidden; display: grid; }
+.rm-strip img { width: 100%; aspect-ratio: 4/3; object-fit: contain; background: #000; display: block; }
+.rm-strip span { font-size: 12px; padding: 3px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.rm-strip button.vs span { font-weight: 700; }
+.rm-strip button.rf span { color: #f0c36a; }
+.rm-strip button.cur { border-color: #e0483e; box-shadow: 0 0 0 2px #e0483e; }
 .rm-sermon { background: #151c30; border: 1px solid #2b3755; border-radius: 14px; padding: 10px 12px; color: #e8ecf5; }
 .rm-sermon summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
 .rm-sermon .rm-secs { margin-top: 8px; max-height: 40vh; overflow: auto; }

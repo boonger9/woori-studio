@@ -26,6 +26,10 @@
     <div class="pr-cur">
       <div class="pr-label"><span id="cur-label">현재 화면</span><span id="cur-count"></span></div>
       <div id="cur"></div>
+      <div class="pr-strip-wrap" id="strip-wrap" hidden>
+        <div class="pr-label"><span id="strip-title"></span><span id="strip-hint"></span></div>
+        <div class="pr-strip" id="strip"></div>
+      </div>
     </div>
     <div class="pr-side">
       <div>
@@ -50,7 +54,8 @@
 <script type="module">
 import { requireLogin } from "./js/firebase.js";
 import { mountStage, preloadSlides, slideLabel } from "./js/render.js";
-import { watchDeck, expandItems, sectionsOf, saveDeck, nextSunday, sampleDeck, stressDeck } from "./js/deck.js";
+import { watchDeck, expandItems, sectionsOf, saveDeck, nextSunday, sampleDeck, stressDeck,
+         songRange, verseTarget, refrainTarget, pageCaption } from "./js/deck.js";
 import { createLive, clamp, keepAwake } from "./js/live.js";
 import { loadManifest } from "./js/media.js";
 
@@ -86,14 +91,46 @@ requireLogin($("gate"), (user) => {
     const cur = document.querySelector("#list button.cur");
     if (cur) cur.scrollIntoView({ block: "nearest" });
     preloadSlides(slides.slice(i, i + 4));
+    renderStrip(i);
   }
+
+  // 지금 곡(곡이 아니면 다음 곡)의 모든 장을 작은 그림으로 → 눌러서 바로 이동
+  let stripKey = "";
+  function renderStrip(i) {
+    const r = songRange(slides, i);
+    if (!r || r.to === r.from && slides[r.from].type === "image") { $("strip-wrap").hidden = true; stripKey = ""; return; }
+    const key = `${deckId}:${r.from}-${r.to}:${r.current}`;
+    if (key !== stripKey) {
+      stripKey = key;
+      const first = slides[r.from];
+      $("strip-title").textContent = (r.current ? "지금 곡 · " : "다음 곡 미리보기 · ") + slideLabel(first).replace(/ · .*$| \(.*\)$/g, "");
+      const verses = new Set(slides.slice(r.from, r.to + 1).map((s) => s.verse).filter(Boolean));
+      const hasR = slides.slice(r.from, r.to + 1).some((s) => s.refrain);
+      $("strip-hint").textContent = verses.size > 1 ? `숫자키 1~${verses.size}: 그 절로${hasR ? " · R: 후렴" : ""}` : (hasR ? "R: 후렴" : "");
+      $("strip").innerHTML = slides.slice(r.from, r.to + 1).map((s, k) => {
+        const j = r.from + k;
+        return `<button data-i="${j}" class="${s.vstart && s.verse > 0 ? "vs" : ""}${s.refrain ? " rf" : ""}">
+          <img src="${s.image}" alt="" loading="lazy"><span>${pageCaption(s).replace(/</g, "&lt;")}</span></button>`;
+      }).join("");
+    }
+    $("strip-wrap").hidden = false;
+    document.querySelectorAll("#strip button").forEach((b) => b.classList.toggle("cur", +b.dataset.i === i && live.state.mode === "slide"));
+    const c = document.querySelector("#strip button.cur");
+    if (c) c.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  const goVerse = (n) => { const j = verseTarget(slides, live.state.index || 0, n); if (j >= 0) go({ index: j, mode: "slide" }); else toast(`${n}절이 없습니다.`); };
+  const goRefrain = () => { const j = refrainTarget(slides, live.state.index || 0); if (j >= 0) go({ index: j, mode: "slide" }); else toast("후렴이 없는 곡입니다."); };
 
   function renderList() {
     const secs = sectionsOf(slides);
     const starts = new Map(secs.map((s) => [s.index, s.label]));
-    $("list").innerHTML = slides.map((s, i) =>
-      (starts.has(i) ? `<div class="sec">${starts.get(i)}</div>` : "") +
-      `<button data-i="${i}"><span class="no">${i + 1}</span><span>${slideLabel(s).replace(/</g, "&lt;")}</span></button>`).join("");
+    $("list").innerHTML = slides.map((s, i) => {
+      // 같은 곡의 두 번째 장부터는 "2절 · 후렴"처럼 짧게, 절이 시작되는 장은 굵게
+      const sub = i > 0 && slides[i - 1].itemIndex === s.itemIndex && ["hymn", "gospel", "responsive"].includes(s.type);
+      const label = sub ? `${pageCaption(s)}${s.verse ? ` (${s.page})` : ""}` : slideLabel(s);
+      return (starts.has(i) ? `<div class="sec">${starts.get(i)}</div>` : "") +
+        `<button data-i="${i}" class="${sub ? "sub" : ""}${s.vstart && sub ? " vs" : ""}${s.refrain ? " rf" : ""}"><span class="no">${i + 1}</span><span>${label.replace(/</g, "&lt;")}</span></button>`;
+    }).join("");
   }
 
   function openDeck(id, { takeOver = false } = {}) {
@@ -139,6 +176,7 @@ requireLogin($("gate"), (user) => {
   $("m-black").onclick = () => toggle("black");
   $("m-logo").onclick = () => toggle("logo");
   $("list").onclick = (e) => { const b = e.target.closest("button"); if (b) go({ index: +b.dataset.i, mode: "slide" }); };
+  $("strip").onclick = $("list").onclick;
   $("make-sample").onclick = async () => {
     try { await saveDeck(deckId, sampleDeck(deckId)); toast("샘플 예배를 새로 만들었습니다."); } catch (e) { toast("저장 실패: " + e.message, true); }
   };
@@ -170,6 +208,8 @@ requireLogin($("gate"), (user) => {
     // 한글 입력 상태에서도 되도록 글자가 아니라 키 위치(e.code)로 판단
     else if (e.code === "KeyB" || e.code === "Period") toggle("black");
     else if (e.code === "KeyL") toggle("logo");
+    else if (/^(Digit|Numpad)[1-9]$/.test(e.code)) goVerse(+e.code.slice(-1));   // 인도자가 "3절 부릅시다" → 3
+    else if (e.code === "KeyR") goRefrain();                                       // 후렴으로
     else if (e.key === "Home") go({ index: 0, mode: "slide" });
     else if (e.key === "End") go({ index: Math.max(0, slides.length - 1), mode: "slide" });
   });
@@ -179,6 +219,7 @@ requireLogin($("gate"), (user) => {
       const c = e.data && e.data.cmd;
       if (c === "next") step(1); else if (c === "prev") step(-1);
       else if (c === "black") toggle("black"); else if (c === "logo") toggle("logo");
+      else if (/^verse[1-9]$/.test(c)) goVerse(+c.slice(5)); else if (c === "refrain") goRefrain();
     };
   }
 

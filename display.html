@@ -83,7 +83,10 @@ const KEYMAP = { ArrowRight: "next", PageDown: "next", " ": "next", Enter: "next
   ArrowLeft: "prev", PageUp: "prev", Backspace: "prev", ArrowUp: "prev" };
 const CODEMAP = { KeyB: "black", Period: "black", KeyL: "logo" }; // 한글 입력 상태에서도 동작
 document.addEventListener("keydown", (e) => {
-  const c = KEYMAP[e.key] || CODEMAP[e.code];
+  let c = KEYMAP[e.key] || CODEMAP[e.code];
+  const d = e.code.match(/^(?:Digit|Numpad)([1-9])$/);
+  if (d) c = "verse" + d[1];        // 숫자키: 찬송 n절로
+  if (e.code === "KeyR") c = "refrain"; // R: 후렴으로
   if (c && cmd) { e.preventDefault(); cmd.postMessage({ cmd: c }); }
 });
 </script>

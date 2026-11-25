@@ -1,6 +1,6 @@
 // 예배 슬라이드 묶음(덱) 데이터: 불러오기, 저장, 자동 분할, 샘플
 import { db, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "./firebase.js";
-import { hymnPages, responsivePages, gospelPages } from "./media.js";
+import { hymnPages, responsivePages, gospelPages, hymnMeta, gospelLyrics } from "./media.js";
 import { APOSTLES_CREED, CLOSING_HYMN } from "./fixed.js";
 
 /*
@@ -71,8 +71,13 @@ export function expandItems(items = [], manifest = { hymns: {}, responsive: {} }
           message: `${it.no}장 악보 PPT가 아직 준비되지 않았습니다` });
         return;
       }
-      pages.forEach((image, p) => slides.push({ ...base, type: "hymn", no: it.no, title: it.title || "",
-        note: it.note || "", image, page: `${p + 1}/${pages.length}` }));
+      const meta = hymnMeta(manifest, it.no);
+      pages.forEach((image, p) => {
+        const mt = meta && meta[p];
+        slides.push({ ...base, type: "hymn", no: it.no, title: it.title || "", note: it.note || "", image,
+          page: `${p + 1}/${pages.length}`,
+          ...(mt ? { verse: mt.verse, refrain: mt.refrain, vstart: p === 0 || meta[p - 1].verse !== mt.verse } : {}) });
+      });
       return;
     }
     if (it.type === "gospel") {
@@ -82,8 +87,9 @@ export function expandItems(items = [], manifest = { hymns: {}, responsive: {} }
           message: `복음송가 '${it.title || ""}' 악보가 아직 준비되지 않았습니다` });
         return;
       }
+      const lyr = gospelLyrics(manifest, it.id);
       pages.forEach((image, p) => slides.push({ ...base, type: "gospel", id: it.id, title: it.title || "",
-        image, page: `${p + 1}/${pages.length}` }));
+        image, page: `${p + 1}/${pages.length}`, ...(lyr[p] ? { lyric: lyr[p] } : {}) }));
       return;
     }
     if (it.type === "art") {   // 설교 그림 (원고 그림·설교그림 폴더 파일)
@@ -195,4 +201,39 @@ export function stressDeck(date, count = 120) {
     items.push({ section: `구간 ${Math.ceil(i / 20)}`, type: "text", title: `시험 슬라이드 ${i}`, body: `${i}번째 장입니다.\n장수 제한 없이 넘어가는지 확인합니다.` });
   }
   return { date, title: "장수 제한 시험", items };
+}
+
+/** i번째 화면이 속한 곡(같은 항목)의 장 번호 범위. 곡이 아니면 바로 다음 곡 */
+export function songRange(slides, i) {
+  const isSong = (s) => s && ["hymn", "gospel", "responsive", "image"].includes(s.type);
+  let k = i;
+  if (!isSong(slides[k])) {
+    k = slides.findIndex((s, j) => j > i && isSong(s));
+    if (k < 0) return null;
+  }
+  const item = slides[k].itemIndex;
+  let a = k, b = k;
+  while (a > 0 && slides[a - 1].itemIndex === item) a--;
+  while (b < slides.length - 1 && slides[b + 1].itemIndex === item) b++;
+  return { from: a, to: b, current: i >= a && i <= b };
+}
+
+/** 찬송 n절 첫 장 / 지금 절의 후렴 첫 장 */
+export function verseTarget(slides, i, verse) {
+  const r = songRange(slides, i); if (!r) return -1;
+  for (let j = r.from; j <= r.to; j++) if (slides[j].verse === verse) return j;
+  return -1;
+}
+export function refrainTarget(slides, i) {
+  const r = songRange(slides, i); if (!r) return -1;
+  const v = r.current && slides[i].verse ? slides[i].verse : 1;
+  for (let j = r.from; j <= r.to; j++) if (slides[j].verse === v && slides[j].refrain) return j;
+  return -1;
+}
+
+/** 미리보기 칸 아래 글: 1절 / 1절 후렴 / 가사 첫 줄 / 쪽 */
+export function pageCaption(s) {
+  if (s.verse) return `${s.verse}절${s.refrain ? " 후렴" : ""}`;
+  if (s.lyric) return s.lyric;
+  return s.page || "";
 }

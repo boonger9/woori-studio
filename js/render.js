@@ -102,8 +102,8 @@ export function preloadSlides(slides) {
 
 export function slideLabel(s) {
   if (!s) return "";
-  if (s.type === "hymn") return `${s.no ? s.no + "장 " : ""}${s.title || ""}${s.page ? " (" + s.page + ")" : ""}`;
-  if (s.type === "gospel") return `찬양 ${s.title || ""}${s.page ? " (" + s.page + ")" : ""}`;
+  if (s.type === "hymn") return `${s.no ? s.no + "장 " : ""}${s.title || ""}${s.verse ? ` · ${s.verse}절${s.refrain ? " 후렴" : ""}` : ""}${s.page ? " (" + s.page + ")" : ""}`;
+  if (s.type === "gospel") return `찬양 ${s.title || ""}${s.lyric ? ` · “${s.lyric}”` : ""}${s.page ? " (" + s.page + ")" : ""}`;
   if (s.type === "responsive") return `교독문 ${s.no}번 ${s.title || ""}${s.page ? " (" + s.page + ")" : ""}`;
   if (s.type === "missing") return `⚠ ${s.message}`;
   if (s.type === "logo") return "교회 로고";

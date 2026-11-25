@@ -23,6 +23,11 @@
     <div><div class="cap">지금</div><div id="cur"></div></div>
     <div><div class="cap">다음</div><div id="next"></div></div>
   </div>
+  <div class="rm-song" id="song" hidden>
+    <div class="cap" id="song-title"></div>
+    <div class="rm-vbtns" id="vbtns"></div>
+    <div class="rm-strip" id="rstrip"></div>
+  </div>
   <div class="rm-secs" id="secs" aria-label="순서 바로가기"></div>
   <details class="rm-sermon" id="sermon-box" hidden>
     <summary>설교 중 화면 바로가기 <span id="sermon-n"></span></summary>
@@ -43,7 +48,7 @@
 <script type="module">
 import { requireLogin } from "./js/firebase.js";
 import { mountStage, slideLabel } from "./js/render.js";
-import { watchDeck, expandItems, sectionsOf } from "./js/deck.js";
+import { watchDeck, expandItems, sectionsOf, songRange, verseTarget, refrainTarget, pageCaption } from "./js/deck.js";
 import { createLive, clamp, keepAwake, watchDisplayPresence } from "./js/live.js";
 import { loadManifest } from "./js/media.js";
 
@@ -73,6 +78,7 @@ requireLogin($("gate"), () => {
     let curSec = -1; secs.forEach((sec, k) => { if (sec.index <= i) curSec = k; });
     document.querySelectorAll("#secs button").forEach((b, k) => b.classList.toggle("cur", k === curSec));
     document.querySelectorAll("#sermon button").forEach((b) => b.classList.toggle("cur", +b.dataset.i === i));
+    renderSong(i);
   }
 
   function useDeck(id) {
@@ -89,6 +95,32 @@ requireLogin($("gate"), () => {
       $("sermon").innerHTML = ser.map(({ s, i }) => `<button data-i="${i}">${(s.type === "image" ? "🖼 " : "") + String(s.title || "").replace(/</g, "&lt;")}${s.page ? " " + s.page : ""}</button>`).join("");
       render();
     });
+  }
+
+  // 지금 곡(곡이 아니면 다음 곡): 절 버튼 + 장 그림
+  let songKey = "";
+  function renderSong(i) {
+    const r = songRange(slides, i);
+    if (!r || (r.to === r.from && slides[r.from].type === "image")) { $("song").hidden = true; songKey = ""; return; }
+    const part = slides.slice(r.from, r.to + 1);
+    const key = `${deckId}:${r.from}-${r.to}:${r.current}`;
+    if (key !== songKey) {
+      songKey = key;
+      $("song-title").textContent = (r.current ? "지금 곡 · " : "다음 곡 · ") + slideLabel(part[0]).replace(/ · .*$| \(.*\)$/g, "");
+      const verses = [...new Set(part.map((s) => s.verse).filter(Boolean))];
+      const hasR = part.some((s) => s.refrain);
+      $("vbtns").innerHTML = (verses.length > 1 ? verses.map((v) => `<button data-v="${v}">${v}절</button>`).join("") : "")
+        + (hasR ? `<button data-r="1" class="rf">후렴</button>` : "");
+      $("vbtns").hidden = !$("vbtns").innerHTML;
+      $("rstrip").innerHTML = part.map((s, k) => `<button data-i="${r.from + k}" class="${s.vstart ? "vs" : ""}${s.refrain ? " rf" : ""}">
+        <img src="${s.image}" alt="" loading="lazy"><span>${pageCaption(s).replace(/</g, "&lt;")}</span></button>`).join("");
+    }
+    $("song").hidden = false;
+    const cv = r.current ? slides[i].verse : 0;
+    document.querySelectorAll("#vbtns button[data-v]").forEach((b) => b.classList.toggle("cur", +b.dataset.v === cv && !slides[i].refrain));
+    document.querySelectorAll("#vbtns button[data-r]").forEach((b) => b.classList.toggle("cur", r.current && !!slides[i].refrain));
+    document.querySelectorAll("#rstrip button").forEach((b) => b.classList.toggle("cur", +b.dataset.i === i));
+    const c = document.querySelector("#rstrip button.cur"); if (c) c.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
   async function go(patch) {
@@ -114,6 +146,12 @@ requireLogin($("gate"), () => {
   $("m-logo").onclick = () => toggle("logo");
   $("secs").onclick = (e) => { const b = e.target.closest("button"); if (b) go({ index: +b.dataset.i, mode: "slide" }); };
   $("sermon").onclick = $("secs").onclick;
+  $("rstrip").onclick = $("secs").onclick;
+  $("vbtns").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const j = b.dataset.r ? refrainTarget(slides, live.state.index || 0) : verseTarget(slides, live.state.index || 0, +b.dataset.v);
+    if (j >= 0) go({ index: j, mode: "slide" });
+  };
   keepAwake();
 });
 </script>
