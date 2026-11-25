@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>예배 스튜디오 · 대구우리교회</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/studio.css">
+</head>
+<body>
+<div class="page">
+  <div class="top">
+    <img src="assets/logo.png" alt="대구우리교회">
+    <div style="display:flex; gap:10px; align-items:center">
+      <span class="pill" id="who">로그인 확인 중</span>
+      <button class="btn" id="auth-btn" hidden></button>
+    </div>
+  </div>
+  <h1 style="margin:0 0 6px">예배 스튜디오</h1>
+  <p style="margin:0 0 22px; color:var(--muted)">주보와 예배 슬라이드를 준비하고, 예배당 화면을 PC나 폰으로 넘깁니다.</p>
+
+  <div class="cards">
+    <a class="card" href="presenter.html">
+      <span class="tag">방송 담당자 · 예배당 PC</span>
+      <h2>발표자 모드</h2>
+      <p>현재·다음 화면, 순서 목록, 타이머를 보며 넘깁니다. 키보드와 무선 클리커를 쓸 수 있고, 인터넷이 끊겨도 같은 PC 송출은 계속됩니다.</p>
+    </a>
+    <a class="card" href="remote.html">
+      <span class="tag">담당자 부재 시 · 목사님 폰</span>
+      <h2>폰 리모컨</h2>
+      <p>폰에서 다음·이전, 순서 바로가기, 검은 화면, 로고를 누릅니다. 송출 화면이 켜져 있는지도 보여 줍니다.</p>
+    </a>
+    <a class="card" href="display.html">
+      <span class="tag">프로젝터 화면</span>
+      <h2>송출 화면</h2>
+      <p>예배당 PC에서 이 화면만 열어 두고 한 번 클릭하면 전체 화면이 됩니다. 로그인하지 않아도 됩니다.</p>
+    </a>
+    <div class="card" style="opacity:.6">
+      <span class="tag">다음 단계에서 열립니다</span>
+      <h2>주간 준비</h2>
+      <p>원고 확정 → 설교 요약과 찬송·교독문 추천 → 묵도기원·첫 찬송·기도자·광고 입력 → 주보 PDF와 슬라이드 생성.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { auth, login, logout, isAllowed } from "./js/firebase.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+
+const who = document.getElementById("who"), btn = document.getElementById("auth-btn");
+onAuthStateChanged(auth, (user) => {
+  btn.hidden = false;
+  if (!user) { who.className = "pill"; who.textContent = "로그인 안 됨"; btn.textContent = "Google로 로그인"; btn.onclick = () => login().catch((e) => alert(e.message)); return; }
+  who.className = "pill " + (isAllowed(user) ? "ok" : "warn");
+  who.textContent = isAllowed(user) ? user.email : `${user.email} (권한 없음)`;
+  btn.textContent = "로그아웃"; btn.onclick = () => logout();
+});
+</script>
+</body>
+</html>

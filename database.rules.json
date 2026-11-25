@@ -1,0 +1,26 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "live": {
+      "state": {
+        ".read": true,
+        ".write": "auth != null && auth.token.email_verified == true && auth.token.email == 'boonger235@gmail.com'",
+        ".validate": "newData.hasChildren(['deckId', 'index', 'mode'])",
+        "index": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10000" },
+        "mode": { ".validate": "newData.val() == 'slide' || newData.val() == 'black' || newData.val() == 'logo'" },
+        "deckId": { ".validate": "newData.isString() && newData.val().length <= 20" },
+        "by": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "at": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      },
+      "presence": {
+        "display": {
+          ".read": true,
+          ".write": true,
+          ".validate": "newData.isNumber() || !newData.exists()"
+        }
+      }
+    }
+  }
+}

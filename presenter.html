@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>발표자 모드 · 예배 스튜디오</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/studio.css">
+</head>
+<body class="presenter">
+<div class="gate" id="gate" hidden></div>
+
+<div class="pr" id="app" hidden>
+  <div class="pr-top">
+    <a class="btn" href="index.html">← 홈</a>
+    <input type="date" id="date" aria-label="예배 날짜">
+    <button class="btn" id="load">불러오기</button>
+    <button class="btn" id="make-sample" hidden>샘플 예배 만들기</button>
+    <button class="btn" id="make-stress" hidden>120장 시험 만들기</button>
+    <span class="grow"></span>
+    <span class="pill" id="conn">연결 확인 중</span>
+    <button class="btn primary" id="open-display">송출 창 열기</button>
+  </div>
+
+  <div class="pr-main">
+    <div class="pr-cur">
+      <div class="pr-label"><span id="cur-label">현재 화면</span><span id="cur-count"></span></div>
+      <div id="cur"></div>
+    </div>
+    <div class="pr-side">
+      <div>
+        <div class="pr-label"><span>다음 화면</span></div>
+        <div id="next" class="pr-next"></div>
+      </div>
+      <div class="pr-timer" id="timer" title="누르면 0으로">00:00</div>
+      <div class="pr-modes">
+        <button class="btn" id="m-black">검은 화면 (B)</button>
+        <button class="btn" id="m-logo">교회 로고 (L)</button>
+      </div>
+      <div class="pr-list" id="list" aria-label="슬라이드 목록"></div>
+    </div>
+  </div>
+
+  <div class="pr-bottom">
+    <button class="btn" id="prev">◀ 이전</button>
+    <button class="btn next" id="nextbtn">다음 ▶</button>
+  </div>
+</div>
+
+<script type="module">
+import { requireLogin } from "./js/firebase.js";
+import { mountStage, preloadSlides, slideLabel } from "./js/render.js";
+import { watchDeck, expandItems, sectionsOf, saveDeck, nextSunday, sampleDeck, stressDeck } from "./js/deck.js";
+import { createLive, clamp, keepAwake } from "./js/live.js";
+
+const $ = (id) => document.getElementById(id);
+function toast(msg, isErr) {
+  const t = document.createElement("div");
+  t.className = "toast" + (isErr ? " err" : ""); t.textContent = msg; t.setAttribute("role", "status");
+  document.body.appendChild(t); setTimeout(() => t.remove(), isErr ? 6000 : 2500);
+}
+
+requireLogin($("gate"), (user) => {
+  $("app").hidden = false;
+  const live = createLive({ canWrite: true, who: "presenter-" + Math.random().toString(36).slice(2, 7) });
+  const drawCur = mountStage($("cur"));
+  const drawNext = mountStage($("next"));
+  let slides = [], deckId = null, unwatch = null;
+
+  $("date").value = new URLSearchParams(location.search).get("deck") || nextSunday();
+
+  function render() {
+    const s = live.state;
+    const i = clamp(s.index || 0, 0, Math.max(0, slides.length - 1));
+    drawCur(s.mode === "black" ? { type: "black" } : s.mode === "logo" ? { type: "logo" } : slides[i]);
+    drawNext(slides[i + 1] || { type: "black" });
+    $("cur-label").textContent = s.mode === "slide" ? (slideLabel(slides[i]) || "현재 화면") : (s.mode === "black" ? "검은 화면 송출 중" : "교회 로고 송출 중");
+    $("cur-count").textContent = slides.length ? `${i + 1} / ${slides.length}` : "";
+    $("m-black").classList.toggle("on", s.mode === "black");
+    $("m-logo").classList.toggle("on", s.mode === "logo");
+    document.querySelectorAll("#list button").forEach((b) => b.classList.toggle("cur", +b.dataset.i === i));
+    const cur = document.querySelector("#list button.cur");
+    if (cur) cur.scrollIntoView({ block: "nearest" });
+    preloadSlides(slides.slice(i, i + 4));
+  }
+
+  function renderList() {
+    const secs = sectionsOf(slides);
+    const starts = new Map(secs.map((s) => [s.index, s.label]));
+    $("list").innerHTML = slides.map((s, i) =>
+      (starts.has(i) ? `<div class="sec">${starts.get(i)}</div>` : "") +
+      `<button data-i="${i}"><span class="no">${i + 1}</span><span>${slideLabel(s).replace(/</g, "&lt;")}</span></button>`).join("");
+  }
+
+  function openDeck(id, { takeOver = false } = {}) {
+    if (!id) return toast("예배 날짜를 골라 주세요.", true);
+    deckId = id;
+    $("date").value = id;
+    if (unwatch) unwatch();
+    unwatch = watchDeck(id, (deck, src) => {
+      slides = deck ? expandItems(deck.items) : [];
+      $("make-sample").hidden = $("make-stress").hidden = !!deck;
+      if (!deck && src === "missing") toast(`${id} 예배 슬라이드가 아직 없습니다. 시험하려면 '샘플 예배 만들기'를 누르세요.`);
+      renderList(); render();
+    }, (err) => toast("슬라이드를 불러오지 못했습니다: " + err.message, true));
+    if (takeOver && live.state.deckId !== id) go({ deckId: id, index: 0, mode: "slide" });
+  }
+
+  async function go(patch) {
+    try { await live.update(patch); } catch (e) { toast(e.message, true); }
+  }
+  const step = (d) => go({ index: clamp((live.state.index || 0) + d, 0, Math.max(0, slides.length - 1)), mode: "slide" });
+  const toggle = (m) => go({ mode: live.state.mode === m ? "slide" : m });
+
+  live.onState((s, src) => {
+    if (deckId && s.deckId && s.deckId !== deckId && src !== "self" && src !== "init") openDeck(s.deckId); // 다른 기기에서 예배를 바꾸면 따라감
+    render();
+  });
+  live.onConnection((on) => {
+    $("conn").className = "pill " + (on ? "ok" : "warn");
+    $("conn").textContent = on ? "폰 리모컨 연결 가능" : "오프라인 · 같은 PC 송출은 계속 동작";
+  });
+
+  $("load").onclick = () => {
+    const id = $("date").value;
+    if (live.state.deckId && live.state.deckId !== id &&
+        !confirm(`지금 송출 중인 ${live.state.deckId} 예배 대신 ${id} 예배로 바꿀까요?\n송출 화면이 바로 바뀝니다.`)) return;
+    openDeck(id, { takeOver: true });
+  };
+  $("prev").onclick = () => step(-1);
+  $("nextbtn").onclick = () => step(1);
+  $("m-black").onclick = () => toggle("black");
+  $("m-logo").onclick = () => toggle("logo");
+  $("list").onclick = (e) => { const b = e.target.closest("button"); if (b) go({ index: +b.dataset.i, mode: "slide" }); };
+  $("make-sample").onclick = async () => {
+    try { await saveDeck(deckId, sampleDeck(deckId)); toast("샘플 예배를 만들었습니다."); } catch (e) { toast("저장 실패: " + e.message, true); }
+  };
+  $("make-stress").onclick = async () => {
+    try { await saveDeck(deckId, stressDeck(deckId)); toast("120장 시험 예배를 만들었습니다."); } catch (e) { toast("저장 실패: " + e.message, true); }
+  };
+
+  // 송출 창: 프로젝터(두 번째 화면)가 있으면 그쪽에 열기 시도
+  $("open-display").onclick = async () => {
+    const url = `display.html?deck=${encodeURIComponent(deckId || "")}`;
+    let features = "popup,width=1280,height=720";
+    try {
+      if ("getScreenDetails" in window) {
+        const sd = await window.getScreenDetails();
+        const other = sd.screens.find((s) => s !== sd.currentScreen);
+        if (other) features = `popup,left=${other.availLeft},top=${other.availTop},width=${other.availWidth},height=${other.availHeight}`;
+      }
+    } catch (e) { /* 권한 거부 시 기본 위치 */ }
+    const w = window.open(url, "woori-display", features);
+    if (!w) toast("팝업이 차단되었습니다. 주소창 오른쪽에서 팝업을 허용해 주세요.", true);
+    else toast("송출 창을 프로젝터 화면으로 옮긴 뒤, 그 창을 한 번 클릭하면 전체 화면이 됩니다.");
+  };
+
+  // 키보드·무선 클리커
+  const KEYMAP = { ArrowRight: 1, PageDown: 1, " ": 1, Enter: 1, ArrowDown: 1, ArrowLeft: -1, PageUp: -1, Backspace: -1, ArrowUp: -1 };
+  document.addEventListener("keydown", (e) => {
+    if (e.target.matches("input, textarea")) return;
+    if (KEYMAP[e.key]) { e.preventDefault(); step(KEYMAP[e.key]); }
+    else if (e.key === "b" || e.key === "B" || e.key === ".") toggle("black");
+    else if (e.key === "l" || e.key === "L") toggle("logo");
+    else if (e.key === "Home") go({ index: 0, mode: "slide" });
+    else if (e.key === "End") go({ index: Math.max(0, slides.length - 1), mode: "slide" });
+  });
+  // 송출 창에 초점이 있을 때 누른 키도 여기서 처리
+  if ("BroadcastChannel" in window) {
+    new BroadcastChannel("woori-studio-cmd").onmessage = (e) => {
+      const c = e.data && e.data.cmd;
+      if (c === "next") step(1); else if (c === "prev") step(-1);
+      else if (c === "black") toggle("black"); else if (c === "logo") toggle("logo");
+    };
+  }
+
+  // 타이머 (누르면 초기화)
+  let t0 = Date.now();
+  $("timer").onclick = () => { t0 = Date.now(); };
+  setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    $("timer").textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  }, 1000);
+
+  keepAwake();
+  // 예배 도중 이 화면을 새로 고쳐도 송출 위치가 처음으로 돌아가지 않도록, 현재 송출 상태를 먼저 확인
+  live.ready.then(() => {
+    const urlDeck = new URLSearchParams(location.search).get("deck");
+    if (live.state.deckId && !urlDeck) openDeck(live.state.deckId);
+    else openDeck($("date").value, { takeOver: !live.state.deckId });
+  });
+});
+</script>
+</body>
+</html>

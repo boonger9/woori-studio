@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>송출 화면 · 예배 스튜디오</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/studio.css">
+</head>
+<body class="display">
+<div id="screen"></div>
+<div class="fs-hint" id="hint">
+  <div><b>화면을 한 번 클릭하세요</b><br>전체 화면으로 바뀝니다.<br>이 창은 프로젝터(예배당 화면) 쪽에 두세요.</div>
+</div>
+<div class="display-status"><span class="pill" id="conn">연결 확인 중</span></div>
+
+<script type="module">
+import { mountStage, preloadSlides } from "./js/render.js";
+import { watchDeck, expandItems } from "./js/deck.js";
+import { createLive, announceDisplay, keepAwake } from "./js/live.js";
+
+const draw = mountStage(document.getElementById("screen"));
+const params = new URLSearchParams(location.search);
+const live = createLive({ canWrite: false, who: "display" });
+const cmd = "BroadcastChannel" in window ? new BroadcastChannel("woori-studio-cmd") : null;
+
+let deckId = params.get("deck");
+let slides = [];
+let unwatch = null;
+
+function render() {
+  const s = live.state;
+  if (s.mode === "black") return draw({ type: "black" });
+  if (s.mode === "logo") return draw({ type: "logo" });
+  draw(slides[s.index] || (slides.length ? slides[slides.length - 1] : { type: "logo" }));
+  preloadSlides(slides.slice(s.index, s.index + 4));
+}
+
+function useDeck(id) {
+  if (!id || id === deckId && unwatch) return;
+  deckId = id;
+  if (unwatch) unwatch();
+  unwatch = watchDeck(id, (deck) => {
+    slides = deck ? expandItems(deck.items) : [];
+    preloadSlides(slides);           // 이미지를 미리 모두 받아 둠
+    render();
+  }, (err) => console.warn("덱 읽기 오류", err));
+}
+
+if (deckId) { const id = deckId; deckId = null; useDeck(id); }
+live.onState((s) => { if (s.deckId) useDeck(s.deckId); render(); });
+
+live.onConnection((on) => {
+  const el = document.getElementById("conn");
+  el.className = "pill " + (on ? "ok" : "warn");
+  el.textContent = on ? "리모컨 연결됨" : "오프라인 (같은 PC 발표자 모드는 계속 동작)";
+});
+announceDisplay();
+keepAwake();
+
+// 마우스를 움직이면 3초 동안만 연결 상태 표시
+let moveTimer;
+document.addEventListener("mousemove", () => {
+  document.body.classList.add("moved");
+  clearTimeout(moveTimer);
+  moveTimer = setTimeout(() => document.body.classList.remove("moved"), 3000);
+});
+
+// 전체 화면
+const hint = document.getElementById("hint");
+hint.onclick = async () => {
+  try { await document.documentElement.requestFullscreen({ navigationUI: "hide" }); } catch (e) {}
+  hint.hidden = true;
+};
+document.addEventListener("fullscreenchange", () => { hint.hidden = !!document.fullscreenElement || hint.dataset.dismissed === "1"; });
+hint.addEventListener("click", () => { hint.dataset.dismissed = "1"; });
+
+// 이 창에 초점이 있을 때 누른 키(무선 클리커 포함)는 같은 PC의 발표자 화면으로 전달
+const KEYMAP = { ArrowRight: "next", PageDown: "next", " ": "next", Enter: "next", ArrowDown: "next",
+  ArrowLeft: "prev", PageUp: "prev", Backspace: "prev", ArrowUp: "prev", b: "black", B: "black", ".": "black", l: "logo", L: "logo" };
+document.addEventListener("keydown", (e) => {
+  const c = KEYMAP[e.key];
+  if (c && cmd) { e.preventDefault(); cmd.postMessage({ cmd: c }); }
+});
+</script>
+</body>
+</html>

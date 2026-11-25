@@ -1,0 +1,26 @@
+rules_version = '2';
+// Firebase 콘솔 → Firestore Database → 규칙 탭에 이 내용을 그대로 붙여넣고 [게시]
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 허용된 구글 계정 (방송 담당자를 추가하려면 목록에 이메일을 더 넣습니다)
+    function isStaff() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['boonger235@gmail.com'];
+    }
+
+    // 예배 슬라이드: 송출 화면은 로그인 없이 읽기만, 수정은 허용된 계정만
+    match /decks/{deckId} {
+      allow read: if true;
+      allow write: if isStaff()
+        && deckId.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.items is list;
+    }
+
+    // 그 밖의 모든 데이터는 허용된 계정만
+    match /{document=**} {
+      allow read, write: if isStaff();
+    }
+  }
+}
