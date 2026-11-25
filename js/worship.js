@@ -79,16 +79,22 @@ export function koreanDate(date) {
  *      responsive:{no,title}, hymnBefore:{no,title}, offertory:{no,title}, prayer, gospel:[{id,title}] }
  */
 export function buildWorshipItems(w) {
-  const H = (section, no, extra = {}) => ({ section, type: "hymn", no: Number(no), title: hymnTitle(no), ...extra });
-  const items = [{ section: "예배 전", type: "cover", title: w.isPraise ? "온 세대 찬양예배" : "주일 낮 예배", subtitle: koreanDate(w.date) }];
-  if (w.isPraise && w.gospel && w.gospel.length) {
-    w.gospel.forEach((g) => items.push({ section: "찬양", type: "gospel", id: g.id, title: g.title }));
-  }
+  return w.isPraise ? buildPraiseItems(w) : buildSundayItems(w);
+}
+
+const H = (section, no, extra = {}) => ({ section, type: "hymn", no: Number(no), title: hymnTitle(no), ...extra });
+const CREED = [
+  { section: "신앙고백", type: "title", title: "신앙고백", subtitle: "사도신경" },
+  { section: "신앙고백", type: "text", title: "사도신경", body: APOSTLES_CREED, lines: true, align: "center" },
+];
+
+/** 주일 낮 예배 (8월 2일 주보 순서 기준) */
+function buildSundayItems(w) {
+  const items = [{ section: "예배 전", type: "cover", title: "주일 낮 예배", subtitle: koreanDate(w.date) }];
   (w.prelude || []).filter(Boolean).forEach((n) => items.push(H("묵도기원", n)));
   if (w.first && w.first.no) items.push(H("찬송", w.first.no, w.first.firstVerseOnly ? { note: "1절만", firstVerseOnly: true } : {}));
   if (w.responsive && w.responsive.no) items.push({ section: "성시교독", type: "responsive", no: Number(w.responsive.no), title: responsiveTitle(w.responsive.no) });
-  items.push({ section: "신앙고백", type: "title", title: "신앙고백", subtitle: "사도신경" });
-  items.push({ section: "신앙고백", type: "text", title: "사도신경", body: APOSTLES_CREED, lines: true, align: "center" });
+  items.push(...CREED);
   if (w.hymnBefore && w.hymnBefore.no) items.push(H("설교 전 찬송", w.hymnBefore.no));
   items.push({ section: "대표기도", type: "title", title: "대표기도", subtitle: w.prayer || "" });
   items.push({ section: "말씀", type: "title", title: w.sermonTitle || "말씀", subtitle: [w.passage, w.preacher].filter(Boolean).join(" · ") });
@@ -99,6 +105,22 @@ export function buildWorshipItems(w) {
   }
   items.push({ section: "교회 소식", type: "title", title: "교회 소식" });
   items.push(H("폐회 찬송", CLOSING_HYMN.no));
+  items.push({ section: "축도", type: "title", title: "축도", subtitle: w.preacher || "" });
+  items.push({ section: "예배 후", type: "logo" });
+  return items;
+}
+
+/** 온 세대 찬양예배 (넷째 주): 경배와 찬양(복음송가) → 신앙고백 → 광고 → 봉헌 → 대표기도 → 성경봉독 → 설교 → 설교 후 찬양 → 축도 */
+function buildPraiseItems(w) {
+  const items = [{ section: "예배 전", type: "cover", title: "온 세대 찬양예배", subtitle: koreanDate(w.date) }];
+  (w.gospel || []).forEach((g) => items.push({ section: "경배와 찬양", type: "gospel", id: g.id, title: g.title }));
+  items.push(...CREED);
+  items.push({ section: "광고", type: "title", title: "교회 소식" });
+  if (w.offertory && w.offertory.no) items.push(H("봉헌", w.offertory.no));
+  items.push({ section: "대표기도", type: "title", title: "대표기도", subtitle: w.prayer || "" });
+  if (w.passage) items.push({ section: "성경봉독", type: "title", title: "성경봉독", subtitle: w.passage });
+  items.push({ section: "설교", type: "title", title: w.sermonTitle || "말씀", subtitle: [w.passage, w.preacher].filter(Boolean).join(" · ") });
+  if (w.gospelAfter && w.gospelAfter.id) items.push({ section: "설교 후 찬양", type: "gospel", id: w.gospelAfter.id, title: w.gospelAfter.title });
   items.push({ section: "축도", type: "title", title: "축도", subtitle: w.preacher || "" });
   items.push({ section: "예배 후", type: "logo" });
   return items;

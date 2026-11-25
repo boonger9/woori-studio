@@ -37,6 +37,7 @@
   .gospel-list { display: grid; gap: 6px; max-height: 260px; overflow: auto; }
   .gospel-list label { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
   .order { font-size: 13px; color: var(--blue); font-weight: 700; min-width: 22px; }
+  body.praise .only-regular { display: none; }
   .progress { height: 8px; background: #eef0f4; border-radius: 99px; overflow: hidden; }
   .progress > div { height: 100%; width: 0; background: var(--blue); transition: width .5s; }
 </style>
@@ -115,9 +116,9 @@
       <label class="f">묵상 질문 2 <input type="text" id="med2"></label>
     </div>
     <div class="grid2">
-      <div class="f"><b>설교 전 찬송</b><div class="hymn"><input type="number" id="h-before" min="1" max="645"><span class="t" data-for="h-before"></span><span class="why" id="why-before"></span></div></div>
+      <div class="f only-regular"><b>설교 전 찬송</b><div class="hymn"><input type="number" id="h-before" min="1" max="645"><span class="t" data-for="h-before"></span><span class="why" id="why-before"></span></div></div>
       <div class="f"><b>봉헌송 (설교 후)</b><div class="hymn"><input type="number" id="h-offer" min="1" max="645"><span class="t" data-for="h-offer"></span><span class="why" id="why-offer"></span></div></div>
-      <div class="f"><b>성시교독</b><div class="hymn"><input type="number" id="resp" min="1" max="137"><span class="t" data-for="resp" data-kind="resp"></span><span class="why" id="why-resp"></span></div></div>
+      <div class="f only-regular"><b>성시교독</b><div class="hymn"><input type="number" id="resp" min="1" max="137"><span class="t" data-for="resp" data-kind="resp"></span><span class="why" id="why-resp"></span></div></div>
     </div>
   </div>
 
@@ -125,17 +126,18 @@
   <div class="box">
     <h2><span class="n">4</span> 목사님이 정하는 것</h2>
     <div class="grid2">
-      <div class="f"><b>묵도기원 찬송 1</b><div class="hymn"><input type="number" id="pre1" min="1" max="645"><span class="t" data-for="pre1"></span></div></div>
-      <div class="f"><b>묵도기원 찬송 2</b><div class="hymn"><input type="number" id="pre2" min="1" max="645"><span class="t" data-for="pre2"></span></div></div>
-      <div class="f"><b>첫 찬송</b><div class="hymn"><input type="number" id="first" min="1" max="645"><span class="t" data-for="first"></span></div>
+      <div class="f only-regular"><b>묵도기원 찬송 1</b><div class="hymn"><input type="number" id="pre1" min="1" max="645"><span class="t" data-for="pre1"></span></div></div>
+      <div class="f only-regular"><b>묵도기원 찬송 2</b><div class="hymn"><input type="number" id="pre2" min="1" max="645"><span class="t" data-for="pre2"></span></div></div>
+      <div class="f only-regular"><b>첫 찬송</b><div class="hymn"><input type="number" id="first" min="1" max="645"><span class="t" data-for="first"></span></div>
         <label class="row" style="gap:6px;font-weight:400"><input type="checkbox" id="first-v1" checked> 1절만</label></div>
       <label class="f">대표기도 <input type="text" id="prayer" list="prayer-list" placeholder="예: 김○○ 장로"><datalist id="prayer-list"></datalist></label>
     </div>
     <label class="f">교회 소식 (주보용, 지난주 내용을 불러와 고치면 됩니다) <textarea id="notices" style="min-height:160px"></textarea></label>
     <div id="gospel-box" hidden style="display:grid;gap:8px">
-      <b>복음송가 고르기 (누른 순서대로 부릅니다)</b>
+      <b>경배와 찬양 곡 고르기 (누른 순서대로 부릅니다)</b>
       <div class="row"><button class="btn" id="load-gospel">찬양/악보ppt 폴더 목록 불러오기</button><span id="gospel-msg" class="hint"></span></div>
       <div class="gospel-list" id="gospel-list"></div>
+      <label class="f">설교 후 찬양 (한 곡) <select id="gospel-after"><option value="">— 목록을 불러온 뒤 고르세요 —</option></select></label>
     </div>
   </div>
 
@@ -164,7 +166,7 @@ import { loadManifest } from "./js/media.js";
 
 const $ = (id) => document.getElementById(id);
 const PREACHER = "이상후 목사";
-let manuscriptInfo = null, maskMap = [], gospelSongs = [], gospelPicked = [];
+let manuscriptInfo = null, maskMap = [], gospelSongs = [], gospelPicked = [], gospelAfter = null;
 
 function toast(msg, isErr) {
   const t = document.createElement("div");
@@ -215,12 +217,17 @@ requireLogin($("gate"), async () => {
     const d = $("date").value;
     $("is-communion").checked = isFirstSunday(d);
     $("is-praise").checked = isFourthSunday(d);
-    $("gospel-box").hidden = !$("is-praise").checked;
+    applyPraise();
     $("date-hint").textContent = `${koreanDate(d)} · ${isFirstSunday(d) ? "첫째 주(성찬)" : isFourthSunday(d) ? "넷째 주(찬양예배)" : "일반 주일"} — 필요하면 위 칸을 직접 바꾸세요.`;
     await loadWeek(d);
   }
   $("date").onchange = onDate;
-  $("is-praise").onchange = () => { $("gospel-box").hidden = !$("is-praise").checked; };
+  function applyPraise() {
+    const on = $("is-praise").checked;
+    $("gospel-box").hidden = !on;
+    document.body.classList.toggle("praise", on);
+  }
+  $("is-praise").onchange = applyPraise;
 
   /* ----- 저장된 주간 자료 불러오기 / 지난주 기본값 ----- */
   async function loadWeek(d) {
@@ -237,14 +244,14 @@ requireLogin($("gate"), async () => {
       v("pre1", (w.prelude || [])[0]); v("pre2", (w.prelude || [])[1]); v("first", w.first?.no);
       $("first-v1").checked = w.first ? !!w.first.firstVerseOnly : true;
       v("prayer", w.prayer); v("notices", w.notices);
-      $("is-communion").checked = !!w.isCommunion; $("is-praise").checked = !!w.isPraise; $("gospel-box").hidden = !w.isPraise;
-      gospelPicked = w.gospel || []; renderGospel();
+      $("is-communion").checked = !!w.isCommunion; $("is-praise").checked = !!w.isPraise; applyPraise();
+      gospelPicked = w.gospel || []; gospelAfter = w.gospelAfter || null; renderGospel();
       if (w.manuscript) { manuscriptInfo = w.manuscript; }
       toast("저장해 둔 이 주의 자료를 불러왔습니다.");
     } else {
       ["sermon-title", "passage", "sum-full", "sum-short", "med1", "med2", "h-before", "h-offer", "resp", "pre1", "pre2", "first", "prayer"].forEach((id) => v(id, ""));
       $("notices").value = prevs[0]?.notices || "";
-      gospelPicked = []; renderGospel();
+      gospelPicked = []; gospelAfter = null; renderGospel();
     }
     refreshTitles();
   }
@@ -344,7 +351,15 @@ requireLogin($("gate"), async () => {
       return `<label><input type="checkbox" data-id="${s.id}" ${k >= 0 ? "checked" : ""}><span class="order">${k >= 0 ? k + 1 : ""}</span>
         <span>${s.title.replace(/</g, "&lt;")}${s.folder ? ` <small class="hint">${s.folder}</small>` : ""}</span></label>`;
     }).join("") || '<p class="hint">아직 목록이 없습니다.</p>';
+    const opts = [...all]; if (gospelAfter && !opts.find((x) => x.id === gospelAfter.id)) opts.push(gospelAfter);
+    $("gospel-after").innerHTML = '<option value="">— 고르세요 —</option>' +
+      opts.map((x) => `<option value="${x.id}" ${gospelAfter && gospelAfter.id === x.id ? "selected" : ""}>${x.title.replace(/</g, "&lt;")}</option>`).join("");
   }
+  $("gospel-after").onchange = (e) => {
+    const id = e.target.value;
+    const s = gospelSongs.find((x) => x.id === id) || gospelPicked.find((x) => x.id === id) || (gospelAfter && gospelAfter.id === id ? gospelAfter : null);
+    gospelAfter = id && s ? { id, title: s.title } : null;
+  };
   $("gospel-list").onchange = (e) => {
     const id = e.target.dataset.id; if (!id) return;
     const s = gospelSongs.find((x) => x.id === id) || gospelPicked.find((x) => x.id === id);
@@ -371,20 +386,27 @@ requireLogin($("gate"), async () => {
       responsive: num("resp") ? { no: num("resp"), title: responsiveTitle(num("resp")) } : null,
       prayer: $("prayer").value.trim(), notices: $("notices").value.trim(),
       gospel: $("is-praise").checked ? gospelPicked : [],
+      gospelAfter: $("is-praise").checked ? gospelAfter : null,
       manuscript: manuscriptInfo, updatedAt: Date.now(),
     };
   }
   function problems(w) {
     const p = [];
-    if (w.prelude.length < 2) p.push("묵도기원 찬송 2곡");
-    if (!w.first) p.push("첫 찬송");
-    if (!w.responsive) p.push("성시교독");
-    if (!w.hymnBefore) p.push("설교 전 찬송");
+    if (!w.isPraise) {
+      if (w.prelude.length < 2) p.push("묵도기원 찬송 2곡");
+      if (!w.first) p.push("첫 찬송");
+      if (!w.responsive) p.push("성시교독");
+      if (!w.hymnBefore) p.push("설교 전 찬송");
+    } else {
+      if (!w.gospel.length) p.push("경배와 찬양 곡");
+      if (!w.gospelAfter) p.push("설교 후 찬양");
+      if (!w.passage) p.push("성경봉독 본문");
+    }
     if (!w.offertory) p.push("봉헌송");
     if (!w.prayer) p.push("대표기도");
     if (!w.sermonTitle) p.push("설교 제목");
-    if (w.isPraise && !w.gospel.length) p.push("복음송가");
-    if (document.querySelectorAll(".hymn .t.bad").length) p.push("빨간 표시 번호 확인");
+    const bad = [...document.querySelectorAll(".hymn .t.bad")].filter((el) => el.offsetParent !== null);
+    if (bad.length) p.push("빨간 표시 번호 확인");
     return p;
   }
   $("save-draft").onclick = () => busy($("save-draft"), async () => {
