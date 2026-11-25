@@ -159,7 +159,7 @@
 <script type="module">
 import { requireLogin, db, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, where } from "./js/firebase.js";
 import { loadBackendConfig, saveBackendConfig, callGas, loadMemberNames } from "./js/backend.js";
-import { loadCatalog, hymnTitle, responsiveTitle, maskNames, unmask, parseAiJson, buildUserMessage,
+import { loadCatalog, hymnTitle, responsiveTitle, fixNumberByTitle, maskNames, unmask, parseAiJson, buildUserMessage,
          parseManuscriptTitle, isFirstSunday, isFourthSunday, koreanDate, buildWorshipItems, mediaNeeds } from "./js/worship.js";
 import { saveDeck, nextSunday } from "./js/deck.js";
 import { loadManifest } from "./js/media.js";
@@ -314,8 +314,14 @@ requireLogin($("gate"), async () => {
     if (r.summaryFull) $("sum-full").value = r.summaryFull;
     if (r.summaryShort) $("sum-short").value = r.summaryShort;
     if (r.meditation) { $("med1").value = r.meditation[0] || ""; $("med2").value = r.meditation[1] || ""; }
-    const setH = (id, why, o) => { if (o && o.no) { $(id).value = o.no; $(why).textContent = o.reason ? "추천 이유: " + o.reason : ""; } };
-    setH("h-before", "why-before", r.hymnBefore); setH("h-offer", "why-offer", r.hymnOffertory); setH("resp", "why-resp", r.responsive);
+    const setH = (id, why, o, kind) => {
+      if (!o || !o.no) return;
+      // 번호와 제목이 서로 다르면, 제목으로 번호를 다시 찾는다 (AI가 번호를 헷갈리는 경우 대비)
+      const fixed = fixNumberByTitle(o.no, o.title, kind);
+      $(id).value = fixed.no;
+      $(why).textContent = (o.reason ? "추천 이유: " + o.reason : "") + (fixed.note ? " · " + fixed.note : "");
+    };
+    setH("h-before", "why-before", r.hymnBefore, "hymn"); setH("h-offer", "why-offer", r.hymnOffertory, "hymn"); setH("resp", "why-resp", r.responsive, "resp");
     refreshTitles();
     const bad = [...document.querySelectorAll(".hymn .t.bad")].length;
     toast(bad ? "추천을 채웠습니다. 빨간 표시 번호를 확인해 주세요." : "추천을 채웠습니다. 읽어 보시고 필요하면 고치세요.", !!bad);

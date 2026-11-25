@@ -12,6 +12,24 @@ export async function loadCatalog() {
 export const hymnTitle = (no) => (catalog && catalog.hymns[String(parseInt(no, 10))]) || "";
 export const responsiveTitle = (no) => (catalog && catalog.responsive[String(parseInt(no, 10))]) || "";
 
+/** AI가 준 번호와 제목이 목록과 어긋나면, 제목으로 올바른 번호를 찾아 준다 */
+const squash = (s) => String(s || "").replace(/[^가-힣0-9]/g, "");
+export function fixNumberByTitle(no, title, kind = "hymn") {
+  const list = catalog ? (kind === "resp" ? catalog.responsive : catalog.hymns) : {};
+  const n = parseInt(no, 10);
+  const want = squash(title);
+  if (!want) return { no: n };
+  const have = squash(list[String(n)]);
+  if (have && (have === want || have.startsWith(want) || want.startsWith(have))) return { no: n };
+  for (const [k, t] of Object.entries(list)) {
+    const s = squash(t);
+    if (s && (s === want || s.startsWith(want) || want.startsWith(s))) {
+      return { no: parseInt(k, 10), note: `AI가 ${n}번이라고 했지만 제목 '${title}'은 ${k}번이라 고쳤습니다` };
+    }
+  }
+  return { no: n, note: `AI가 말한 제목 '${title}'과 ${n}번 제목이 달라요 — 꼭 확인해 주세요` };
+}
+
 /* ---------- 성도 이름 가리기 (Gemini로 보내기 전) ---------- */
 const HONORIFIC = "(?=\\s|$|[.,!?·)\\]]|님|씨|집사|권사|장로|성도|형제|자매|목사|전도사|선생|청년|학생)";
 
