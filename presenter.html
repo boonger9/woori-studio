@@ -103,7 +103,10 @@ requireLogin($("gate"), (user) => {
     if (unwatch) unwatch();
     unwatch = watchDeck(id, (deck, src) => {
       slides = deck ? expandItems(deck.items, manifest) : [];
-      $("make-sample").hidden = $("make-stress").hidden = !!deck;
+      const isSample = !!deck && /시험용 샘플|장수 제한 시험/.test(deck.title || "");
+      $("make-sample").hidden = !!deck && !isSample;
+      $("make-sample").textContent = deck ? "샘플 예배 새로 만들기" : "샘플 예배 만들기";
+      $("make-stress").hidden = !!deck;
       if (!deck && src === "missing") toast(`${id} 예배 슬라이드가 아직 없습니다. 시험하려면 '샘플 예배 만들기'를 누르세요.`);
       renderList(); render();
     }, (err) => toast("슬라이드를 불러오지 못했습니다: " + err.message, true));
@@ -137,7 +140,7 @@ requireLogin($("gate"), (user) => {
   $("m-logo").onclick = () => toggle("logo");
   $("list").onclick = (e) => { const b = e.target.closest("button"); if (b) go({ index: +b.dataset.i, mode: "slide" }); };
   $("make-sample").onclick = async () => {
-    try { await saveDeck(deckId, sampleDeck(deckId)); toast("샘플 예배를 만들었습니다."); } catch (e) { toast("저장 실패: " + e.message, true); }
+    try { await saveDeck(deckId, sampleDeck(deckId)); toast("샘플 예배를 새로 만들었습니다."); } catch (e) { toast("저장 실패: " + e.message, true); }
   };
   $("make-stress").onclick = async () => {
     try { await saveDeck(deckId, stressDeck(deckId)); toast("120장 시험 예배를 만들었습니다."); } catch (e) { toast("저장 실패: " + e.message, true); }

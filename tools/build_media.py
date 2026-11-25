@@ -41,14 +41,24 @@ def find_file(folder, number):
     return hits[0] if hits else None
 
 
+def to_pdf(ppt_path, work):
+    """LibreOffice로 PDF 변환. 실패하면 한 번 더 시도하고, 원인을 남김."""
+    last = ""
+    for attempt in (1, 2):
+        r = subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", work, ppt_path],
+                           capture_output=True, text=True, timeout=300)
+        pdfs = glob.glob(os.path.join(work, "*.pdf"))
+        if pdfs and os.path.getsize(pdfs[0]) > 0:
+            return pdfs[0]
+        last = f"시도 {attempt}: code={r.returncode} {r.stdout.strip()[-300:]} {r.stderr.strip()[-300:]}"
+    raise RuntimeError("PDF 변환 실패 — " + last)
+
+
 def ppt_to_webps(ppt_path, out_dir, prefix):
     """PPT → PDF → 페이지별 webp. 만든 장수를 돌려줌."""
     work = tempfile.mkdtemp(prefix="media-")
-    subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", work, ppt_path],
-                   check=True, capture_output=True, timeout=240)
-    pdfs = glob.glob(os.path.join(work, "*.pdf"))
-    if not pdfs or os.path.getsize(pdfs[0]) == 0:
-        raise RuntimeError("PDF 변환 실패")
+    pdf = to_pdf(ppt_path, work)
+    pdfs = [pdf]
     subprocess.run(["pdftoppm", "-png", "-scale-to", str(LONG_SIDE), pdfs[0], os.path.join(work, "p")],
                    check=True, capture_output=True, timeout=240)
     pngs = sorted(glob.glob(os.path.join(work, "p-*.png")),
@@ -78,7 +88,7 @@ def main():
         src = find_file(os.path.join(lib, kind), num)
         label = f"{'찬송' if kind == 'hymns' else '교독문'} {num}"
         if not src:
-            print(f"  [없음] {label}")
+            print(f"::warning::{label} 파일을 찾지 못했습니다 ({os.path.join(lib, kind)})")
             manifest["missing"].append(label)
             continue
         try:
@@ -86,7 +96,7 @@ def main():
             manifest[kind][str(int(num))] = pages
             print(f"  [완료] {label} → {pages}장")
         except Exception as e:  # 한 곡이 실패해도 나머지는 계속
-            print(f"  [실패] {label}: {e}")
+            print(f"::warning::{label} 변환 실패: {e}")
             manifest["missing"].append(label)
 
     with open(os.path.join(media, "manifest.json"), "w", encoding="utf-8") as f:

@@ -1,6 +1,7 @@
 // 예배 슬라이드 묶음(덱) 데이터: 불러오기, 저장, 자동 분할, 샘플
 import { db, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "./firebase.js";
 import { hymnPages, responsivePages } from "./media.js";
+import { APOSTLES_CREED, CLOSING_HYMN } from "./fixed.js";
 
 /*
  덱 구조 (Firestore: decks/{YYYY-MM-DD})
@@ -26,9 +27,12 @@ function lineCost(line) {
   return Math.max(1, Math.ceil([...line].length / MAX_CHARS_PER_LINE));
 }
 
-/** 긴 본문을 화면 분량 단위로 나눔. 빈 줄은 문단 경계로 우선 사용 */
+/** 긴 본문을 화면 분량 단위로 나눔. 빈 줄은 문단 경계로 우선 사용.
+ *  '---' 줄이 있으면 그 자리에서만 나눔 (사도신경처럼 넘기는 위치가 정해진 고정 문구) */
 export function paginateBody(body) {
-  const lines = String(body || "").replace(/\r/g, "").split("\n");
+  const text = String(body || "").replace(/\r/g, "");
+  if (/^---$/m.test(text)) return text.split(/^---$/m).map((p) => p.trim()).filter(Boolean);
+  const lines = text.split("\n");
   const pages = [];
   let cur = [], cost = 0;
   for (const raw of lines) {
@@ -147,23 +151,15 @@ export function sampleDeck(date) {
       { section: "찬송", type: "hymn", no: 4, title: "성부 성자와 성령", note: "1절만" },
       { section: "성시교독", type: "responsive", no: 115, title: "구주 강림(1)" },
       { section: "신앙고백", type: "title", title: "신앙고백", subtitle: "사도신경" },
+      { section: "신앙고백", type: "text", title: "사도신경", body: APOSTLES_CREED },
       { section: "설교 전 찬송", type: "hymn", no: 258, title: "샘물과 같은 보혈은" },
       { section: "대표기도", type: "title", title: "대표기도", subtitle: "○○○ 장로" },
       { section: "말씀", type: "title", title: "괜찮은 척하느라 얼마나 힘드셨습니까?", subtitle: "고린도후서 1:3~7 · 이상후 목사" },
       { section: "말씀", type: "text", title: "오늘의 말씀 요점",
         body: "하나님의 위로는 고난이 끝난 뒤에만 오지 않습니다.\n고난 한가운데서 먼저 찾아오십니다.\n\n받은 위로는 흘려보내라고 주신 위로입니다.\n오늘 내 곁의 한 사람에게 그 위로를 나눕시다." },
       { section: "봉헌", type: "hymn", no: 268, title: "죄에서 자유를 얻게 함은" },
-      { section: "교회 소식", type: "text", title: "교회 소식",
-        body: [
-          "1. 대림절 첫째 주일입니다. 성탄을 기다리며 매일 말씀과 기도로 준비합시다.",
-          "2. 매월 첫 주는 성찬식이 있습니다. 다음 주일 성찬에 마음으로 준비해 주세요.",
-          "3. 수요일 저녁에는 마가복음 성경공부가 이어집니다.",
-          "4. 오후 예배는 하이델베르크 요리문답을 계속 배웁니다.",
-          "5. 교회 카카오톡 채널에서 주보와 설교노트를 확인하실 수 있습니다.",
-          "6. 새로 오신 분들을 환영합니다. 예배 후 친교실에서 함께 식사합니다.",
-          "7. 이 광고는 자동 분할을 시험하려고 일부러 길게 적었습니다. 화면에 다 들어가지 않으면 다음 장으로 넘어갑니다.",
-        ].join("\n") },
-      { section: "폐회 찬송", type: "hymn", no: 54, title: "주여 복을 구하오니" },
+      { section: "교회 소식", type: "title", title: "교회 소식" },
+      { section: "폐회 찬송", type: "hymn", ...CLOSING_HYMN },
       { section: "축도", type: "title", title: "축도", subtitle: "이상후 목사" },
       { section: "예배 후", type: "logo" },
     ],
