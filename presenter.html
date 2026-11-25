@@ -160,8 +160,9 @@ requireLogin($("gate"), (user) => {
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea")) return;
     if (KEYMAP[e.key]) { e.preventDefault(); step(KEYMAP[e.key]); }
-    else if (e.key === "b" || e.key === "B" || e.key === ".") toggle("black");
-    else if (e.key === "l" || e.key === "L") toggle("logo");
+    // 한글 입력 상태에서도 되도록 글자가 아니라 키 위치(e.code)로 판단
+    else if (e.code === "KeyB" || e.code === "Period") toggle("black");
+    else if (e.code === "KeyL") toggle("logo");
     else if (e.key === "Home") go({ index: 0, mode: "slide" });
     else if (e.key === "End") go({ index: Math.max(0, slides.length - 1), mode: "slide" });
   });

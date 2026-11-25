@@ -77,9 +77,10 @@ hint.addEventListener("click", () => { hint.dataset.dismissed = "1"; });
 
 // 이 창에 초점이 있을 때 누른 키(무선 클리커 포함)는 같은 PC의 발표자 화면으로 전달
 const KEYMAP = { ArrowRight: "next", PageDown: "next", " ": "next", Enter: "next", ArrowDown: "next",
-  ArrowLeft: "prev", PageUp: "prev", Backspace: "prev", ArrowUp: "prev", b: "black", B: "black", ".": "black", l: "logo", L: "logo" };
+  ArrowLeft: "prev", PageUp: "prev", Backspace: "prev", ArrowUp: "prev" };
+const CODEMAP = { KeyB: "black", Period: "black", KeyL: "logo" }; // 한글 입력 상태에서도 동작
 document.addEventListener("keydown", (e) => {
-  const c = KEYMAP[e.key];
+  const c = KEYMAP[e.key] || CODEMAP[e.code];
   if (c && cmd) { e.preventDefault(); cmd.postMessage({ cmd: c }); }
 });
 </script>
