@@ -27,9 +27,14 @@ function slideHTML(s) {
     case "text":
       return `<div class="sl sl-text">
         <div class="x-head"><span>${esc(s.title || s.section || "")}</span><span class="x-page">${esc(s.page || "")}</span></div>
-        <div class="x-body fit" data-max="76" data-min="40">${nl(s.body)}</div></div>`;
+        ${s.lines
+          // 줄 위치가 정해진 고정 문구(사도신경 등): 한 줄이 꺾이지 않도록 글자 크기를 맞춤
+          ? `<div class="x-body x-lines fit${s.align === "center" ? " x-center" : ""}" data-max="66" data-min="34">${
+              String(s.body || "").split("\n").map((l) => `<div>${esc(l) || "&nbsp;"}</div>`).join("")}</div>`
+          : `<div class="x-body fit" data-max="76" data-min="40">${nl(s.body)}</div>`}</div>`;
     case "hymn":
     case "responsive":
+    case "gospel":
       // 악보 PPT·교독문 PPT 그림 (4:3)을 검은 바탕 가운데에
       return `<div class="sl sl-image"><img src="${esc(s.image)}" alt="${esc(slideLabel(s))}"></div>`;
     case "missing":
@@ -98,6 +103,7 @@ export function preloadSlides(slides) {
 export function slideLabel(s) {
   if (!s) return "";
   if (s.type === "hymn") return `${s.no ? s.no + "장 " : ""}${s.title || ""}${s.page ? " (" + s.page + ")" : ""}`;
+  if (s.type === "gospel") return `찬양 ${s.title || ""}${s.page ? " (" + s.page + ")" : ""}`;
   if (s.type === "responsive") return `교독문 ${s.no}번 ${s.title || ""}${s.page ? " (" + s.page + ")" : ""}`;
   if (s.type === "missing") return `⚠ ${s.message}`;
   if (s.type === "logo") return "교회 로고";

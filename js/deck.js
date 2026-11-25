@@ -1,6 +1,6 @@
 // 예배 슬라이드 묶음(덱) 데이터: 불러오기, 저장, 자동 분할, 샘플
 import { db, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "./firebase.js";
-import { hymnPages, responsivePages } from "./media.js";
+import { hymnPages, responsivePages, gospelPages } from "./media.js";
 import { APOSTLES_CREED, CLOSING_HYMN } from "./fixed.js";
 
 /*
@@ -60,7 +60,7 @@ export function expandItems(items = [], manifest = { hymns: {}, responsive: {} }
     if (it.type === "text" && it.body) {
       const pages = paginateBody(it.body);
       pages.forEach((body, p) =>
-        slides.push({ ...base, type: "text", title: it.title || "", body,
+        slides.push({ ...base, type: "text", title: it.title || "", body, lines: !!it.lines, align: it.align || "",
           page: pages.length > 1 ? `${p + 1}/${pages.length}` : "" }));
       return;
     }
@@ -73,6 +73,17 @@ export function expandItems(items = [], manifest = { hymns: {}, responsive: {} }
       }
       pages.forEach((image, p) => slides.push({ ...base, type: "hymn", no: it.no, title: it.title || "",
         note: it.note || "", image, page: `${p + 1}/${pages.length}` }));
+      return;
+    }
+    if (it.type === "gospel") {
+      const pages = gospelPages(manifest, it.id);
+      if (!pages.length) {
+        slides.push({ ...base, type: "missing", title: it.title || "",
+          message: `복음송가 '${it.title || ""}' 악보가 아직 준비되지 않았습니다` });
+        return;
+      }
+      pages.forEach((image, p) => slides.push({ ...base, type: "gospel", id: it.id, title: it.title || "",
+        image, page: `${p + 1}/${pages.length}` }));
       return;
     }
     if (it.type === "responsive") {
@@ -151,7 +162,7 @@ export function sampleDeck(date) {
       { section: "찬송", type: "hymn", no: 4, title: "성부 성자와 성령", note: "1절만" },
       { section: "성시교독", type: "responsive", no: 115, title: "구주 강림(1)" },
       { section: "신앙고백", type: "title", title: "신앙고백", subtitle: "사도신경" },
-      { section: "신앙고백", type: "text", title: "사도신경", body: APOSTLES_CREED },
+      { section: "신앙고백", type: "text", title: "사도신경", body: APOSTLES_CREED, lines: true, align: "center" },
       { section: "설교 전 찬송", type: "hymn", no: 258, title: "샘물과 같은 보혈은" },
       { section: "대표기도", type: "title", title: "대표기도", subtitle: "○○○ 장로" },
       { section: "말씀", type: "title", title: "괜찮은 척하느라 얼마나 힘드셨습니까?", subtitle: "고린도후서 1:3~7 · 이상후 목사" },

@@ -18,9 +18,12 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       HAS_TOKEN: ${{ secrets.HYMN_REPO_TOKEN != '' }}
+      # 복음송가: 드라이브 '찬양/악보ppt' 폴더를 Apps Script(목사님 계정)를 거쳐 받음
+      GAS_URL: ${{ secrets.GAS_URL }}
+      STUDIO_SECRET: ${{ secrets.STUDIO_SECRET }}
     steps:
       - name: 예배 스튜디오 코드 받기
         uses: actions/checkout@v4
@@ -45,8 +48,11 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: ${{ steps.list.outputs.patterns }}
 
+      - name: 토큰이 없을 때 안내
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::warning::HYMN_REPO_TOKEN 비밀값이 없어 찬송·교독문 악보를 만들지 못합니다."
+
       - name: 변환 도구 설치 (LibreOffice, 한글 글꼴)
-        if: env.HAS_TOKEN == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libreoffice fonts-nanum fonts-noto-cjk poppler-utils
@@ -56,22 +62,12 @@ jobs:
       - name: 웹사이트 폴더 만들기
         run: |
           mkdir -p _site
-          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' --exclude '_hymnlib' --exclude 'tools' ./ _site/
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' --exclude '_hymnlib' --exclude 'tools' --exclude 'apps-script' ./ _site/
 
-      - name: 악보 PPT → 그림 변환
-        if: env.HAS_TOKEN == 'true'
+      - name: 악보 PPT → 그림 변환 (찬송·교독문·복음송가)
         run: |
-          ls -la _hymnlib/hymns _hymnlib/responsive || true
-          timeout 120 soffice --headless --version || true
           python3 tools/build_media.py weekly.json _hymnlib _site
           cat _site/media/manifest.json
-
-      - name: 토큰이 없을 때 안내
-        if: env.HAS_TOKEN != 'true'
-        run: |
-          mkdir -p _site/media
-          echo '{"hymns":{},"responsive":{},"missing":["HYMN_REPO_TOKEN 비밀값이 없어 악보를 만들지 못했습니다"]}' > _site/media/manifest.json
-          echo "::warning::HYMN_REPO_TOKEN 비밀값이 없어 악보 그림 없이 배포합니다."
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

@@ -27,6 +27,13 @@
 - 필요한 설정: 저장소 Secret `HYMN_REPO_TOKEN` (woori-hymnppt 읽기 권한이 있는 GitHub 토큰), Pages Source를 **GitHub Actions**로.
 - "1절만"은 기존 PPT 엔진과 같은 규칙으로 앞 2장만 띄웁니다.
 
+## 복음송가 악보 PPT (찬양예배)
+- 구글 드라이브 `찬양/악보ppt` 폴더에 PPT·PPTX·PDF·그림(JPG/PNG)을 올립니다. 하위 폴더도 됩니다.
+- `weekly.json`의 `gospel`에 `{ "id": 드라이브 파일 ID, "title": 곡 제목 }`을 넣으면 배포 때 그림으로 바뀝니다.
+  (2단계 주간 준비 화면에서 목록을 보고 고르면 자동으로 들어갑니다.)
+- 드라이브 파일은 Apps Script(`apps-script/Code.gs`, 목사님 계정으로 실행)를 거쳐 받습니다.
+  저장소 Secret `GAS_URL`, `STUDIO_SECRET`이 필요합니다. 폴더 밖 파일은 받지 않습니다.
+
 ## 처음 설정 (한 번만)
 1. **Firebase 보안 규칙 게시**
    - Firestore Database → 규칙 → `firestore.rules` 내용 붙여넣기 → 게시

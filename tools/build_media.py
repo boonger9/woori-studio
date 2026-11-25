@@ -10,6 +10,7 @@
 - 원본 PPT 전체는 비공개 저장소에만 남고, 여기서 만든 그림은 git 기록에 남지 않습니다
   (GitHub Actions가 배포할 때만 만들어 올림).
 """
+import base64
 import glob
 import json
 import os
@@ -17,6 +18,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from datetime import datetime, timezone
 
 from PIL import Image
@@ -55,9 +57,15 @@ def to_pdf(ppt_path, work):
 
 
 def ppt_to_webps(ppt_path, out_dir, prefix):
-    """PPT → PDF → 페이지별 webp. 만든 장수를 돌려줌."""
+    """PPT·PPTX·PDF·그림 → 페이지별 webp. 만든 장수를 돌려줌."""
     work = tempfile.mkdtemp(prefix="media-")
-    pdf = to_pdf(ppt_path, work)
+    ext = os.path.splitext(ppt_path)[1].lower()
+    if ext in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+        im = Image.open(ppt_path).convert("RGB")
+        im.thumbnail((LONG_SIDE, LONG_SIDE))
+        im.save(os.path.join(out_dir, f"{prefix}-1.webp"), "WEBP", quality=QUALITY)
+        return 1
+    pdf = ppt_path if ext == ".pdf" else to_pdf(ppt_path, work)
     pdfs = [pdf]
     subprocess.run(["pdftoppm", "-png", "-scale-to", str(LONG_SIDE), pdfs[0], os.path.join(work, "p")],
                    check=True, capture_output=True, timeout=240)
@@ -68,6 +76,53 @@ def ppt_to_webps(ppt_path, out_dir, prefix):
     for i, png in enumerate(pngs, 1):
         Image.open(png).convert("RGB").save(os.path.join(out_dir, f"{prefix}-{i}.webp"), "WEBP", quality=QUALITY)
     return len(pngs)
+
+
+GOSPEL_EXT = {
+    "application/vnd.ms-powerpoint": ".ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+}
+
+
+def fetch_gospel(file_id):
+    """Apps Script(목사님 계정으로 실행)를 통해 드라이브 '찬양/악보ppt' 폴더의 파일을 받아 옴."""
+    url, secret = os.environ.get("GAS_URL", ""), os.environ.get("STUDIO_SECRET", "")
+    if not url or not secret:
+        raise RuntimeError("GAS_URL·STUDIO_SECRET 비밀값이 없어 드라이브에서 받을 수 없습니다")
+    body = json.dumps({"action": "getGospelFile", "secret": secret, "fileId": file_id}).encode()
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "text/plain;charset=utf-8"})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    if not data.get("ok"):
+        raise RuntimeError(data.get("error", "알 수 없는 오류"))
+    return data
+
+
+def build_gospel(weekly, media, manifest):
+    """weekly.json의 gospel: [{id, title}] → media/g-<id>-<쪽>.webp"""
+    for g in weekly.get("gospel", []):
+        fid, title = str(g.get("id", "")), g.get("title", "")
+        label = f"복음송가 {title or fid}"
+        if not re.fullmatch(r"[-_A-Za-z0-9]{10,}", fid):
+            manifest["missing"].append(label)
+            print(f"::warning::{label}: 드라이브 파일 ID 형식이 아닙니다")
+            continue
+        try:
+            data = fetch_gospel(fid)
+            ext = os.path.splitext(data.get("name", ""))[1].lower() or GOSPEL_EXT.get(data.get("mimeType"), "")
+            if not ext:
+                raise RuntimeError(f"지원하지 않는 파일 형식: {data.get('mimeType')}")
+            work = tempfile.mkdtemp(prefix="gospel-")
+            src = os.path.join(work, "song" + ext)
+            with open(src, "wb") as f:
+                f.write(base64.b64decode(data["base64"]))
+            pages = ppt_to_webps(src, media, f"g-{fid}")
+            manifest["gospel"][fid] = pages
+            print(f"  [완료] {label} → {pages}장")
+        except Exception as e:
+            manifest["missing"].append(label)
+            print(f"::warning::{label} 실패: {e}")
 
 
 def main():
@@ -81,7 +136,7 @@ def main():
     os.makedirs(media, exist_ok=True)
 
     manifest = {"builtAt": datetime.now(timezone.utc).isoformat(), "dates": weekly.get("dates", []),
-                "hymns": {}, "responsive": {}, "missing": []}
+                "hymns": {}, "responsive": {}, "gospel": {}, "missing": []}
     jobs = [("hymns", "h", n) for n in dict.fromkeys(weekly.get("hymns", []))] + \
            [("responsive", "r", n) for n in dict.fromkeys(weekly.get("responsive", []))]
     for kind, letter, num in jobs:
@@ -99,9 +154,12 @@ def main():
             print(f"::warning::{label} 변환 실패: {e}")
             manifest["missing"].append(label)
 
+    build_gospel(weekly, media, manifest)
+
     with open(os.path.join(media, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=1)
-    print(f"찬송 {len(manifest['hymns'])}곡, 교독문 {len(manifest['responsive'])}편, 누락 {len(manifest['missing'])}")
+    print(f"찬송 {len(manifest['hymns'])}곡, 교독문 {len(manifest['responsive'])}편, "
+          f"복음송가 {len(manifest['gospel'])}곡, 누락 {len(manifest['missing'])}")
 
 
 if __name__ == "__main__":
