@@ -14,8 +14,17 @@
   "responsive": [
     86
   ],
-  "gospel": [],
+  "gospel": [
+    {
+      "id": "1xvjARAT-V8JIHByNB8HjubT10F-iw3dj",
+      "title": "나는 아네 내가 살아가는 이유 불이 되는 것 (불을 내려주소서)"
+    },
+    {
+      "id": "1JcatZTvwNophforHn0u1MDAdSF60D3UP",
+      "title": "하늘의 문을 여소서 이곳을 주목하소서 (임재)"
+    }
+  ],
   "art": [],
   "bulletin": "2026-11-29",
-  "bulletinRev": 1795671432590
+  "bulletinRev": 1795673211588
 }
