@@ -137,6 +137,7 @@
     <p class="hint only-own">출석부에 있는 성도 이름은 '성도1'처럼 가려서 Gemini에 보내고, 결과가 오면 다시 원래 이름으로 돌려놓습니다.</p>
     <p class="hint only-elder" style="display:none">원고가 없으니 <b>제목과 본문 말씀</b>만으로 설교 전 찬송·봉헌(설교 후) 찬송·성시교독을 추천받습니다. 설교 요약은 만들지 않고, 주보 2쪽은 <b>성도들이 적는 말씀 메모 칸</b>으로 나갑니다.</p>
     <div class="row"><button class="btn primary" id="ai">AI 추천 받기</button><span id="ai-msg" class="hint"></span></div>
+    <p class="hint">AI는 <b>비어 있는 찬송·교독 칸만</b> 채웁니다. 목사님이 먼저 적어 둔 번호는 그대로 둡니다.</p>
     <div class="notice" id="mask-note" hidden></div>
     <details id="manual-ai">
       <summary>AI 버튼이 안 될 때: 복사해서 채팅창으로</summary>
@@ -147,9 +148,9 @@
         <div class="row"><button class="btn" id="apply-result">결과 적용</button></div>
       </div>
     </details>
-    <label class="f">주보용 설교 요약 (1,500자 내외) <textarea id="sum-full" style="min-height:200px"></textarea></label>
-    <label class="f">홈페이지용 짧은 요약 <textarea id="sum-short"></textarea></label>
-    <div class="grid2">
+    <label class="f only-own">주보용 설교 요약 (1,500자 내외) <textarea id="sum-full" style="min-height:200px"></textarea></label>
+    <label class="f only-own">홈페이지용 짧은 요약 <textarea id="sum-short"></textarea></label>
+    <div class="grid2 only-own">
       <label class="f">묵상 질문 1 <input type="text" id="med1"></label>
       <label class="f">묵상 질문 2 <input type="text" id="med2"></label>
     </div>
@@ -502,7 +503,9 @@ requireLogin($("gate"), async () => {
       if (!verses.length) throw new Error("본문을 '고후 1:3~7'처럼 적어 주세요.");
       guide = guide || await fetch("data/ai-guide.txt").then((r) => r.text());
       maskMap = [];
-      return { system: guide, user: buildPassageMessage(title, passage, verses.map((x) => `${x.v1} ${x.text}`).join("\n")) };
+      const offer = $("h-offer").value.trim();
+      const fixedNote = offer ? `\n\n※ 설교 후 찬송(봉헌송)은 원로목사님이 이미 정하셨습니다: ${offer}장 ${hymnTitle(offer)}. 이 곡과 어울리게 설교 전 찬송과 성시교독만 추천하세요.` : "";
+      return { system: guide, user: buildPassageMessage(title, passage, verses.map((x) => `${x.v1} ${x.text}`).join("\n")) + fixedNote };
     }
     const text = $("manuscript").value.trim();
     if (text.length < 500) throw new Error("먼저 2번에서 원고를 불러와 주세요.");
@@ -528,6 +531,12 @@ requireLogin($("gate"), async () => {
       if (!o || !o.no) return;
       // 번호와 제목이 서로 다르면, 제목으로 번호를 다시 찾는다 (AI가 번호를 헷갈리는 경우 대비)
       const fixed = fixNumberByTitle(o.no, o.title, kind);
+      const title = kind === "resp" ? responsiveTitle(fixed.no) : hymnTitle(fixed.no);
+      // 목사님이 이미 적은 번호는 절대 덮어쓰지 않음 → AI 추천은 참고로만 보여 줌
+      if ($(id).value.trim()) {
+        $(why).textContent = `목사님이 적은 번호를 그대로 둡니다. (AI 추천은 ${fixed.no}${kind === "resp" ? "번" : "장"} ${title}${o.reason ? " — " + o.reason : ""}) 바꾸고 싶으면 칸을 비우고 다시 누르세요.`;
+        return;
+      }
       $(id).value = fixed.no;
       $(why).textContent = (o.reason ? "추천 이유: " + o.reason : "") + (fixed.note ? " · " + fixed.note : "");
     };
@@ -596,7 +605,7 @@ requireLogin($("gate"), async () => {
       preacher: $("is-elder").checked ? ELDER : PASTOR, isElder: $("is-elder").checked, kidReady: $("kid-ready").checked,
       elderNotes: $("elder-notes").value.trim(), schoolDoc,
       summaryFull: $("is-elder").checked ? "" : $("sum-full").value.trim(), summaryShort: $("is-elder").checked ? "" : $("sum-short").value.trim(),
-      meditation: [$("med1").value.trim(), $("med2").value.trim()].filter(Boolean),
+      meditation: $("is-elder").checked ? [] : [$("med1").value.trim(), $("med2").value.trim()].filter(Boolean),
       prelude: [num("pre1"), num("pre2")].filter(Boolean),
       first: num("first") ? { no: num("first"), firstVerseOnly: $("first-v1").checked } : null,
       hymnBefore: num("h-before") ? { no: num("h-before"), title: hymnTitle(num("h-before")) } : null,
