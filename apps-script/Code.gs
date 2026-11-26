@@ -322,7 +322,9 @@ function createSchoolDoc_({ date, title, passage, passageText, notes, kidSermon 
   else { doc = DocumentApp.create(name); DriveApp.getFileById(doc.getId()).moveTo(root); }
   const body = doc.getBody();
   const H = DocumentApp.ParagraphHeading;
-  body.getParagraphs()[0].setText(title).setHeading(H.TITLE);
+  const first = body.getParagraphs()[0];   // 새 문서의 첫 빈 줄을 제목으로
+  first.setText(title);
+  first.setHeading(H.TITLE);
   const note = body.appendParagraph('원로목사님 설교 주일 · 설교 전문 없음 · 설교: 김용원 원로목사 · 예배 스튜디오가 만든 교회학교용 문서');
   body.appendParagraph('[본문] ' + passage).setHeading(H.HEADING1);
   String(passageText || '').split('\n').forEach(l => { if (l.trim()) body.appendParagraph(l); });
