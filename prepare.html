@@ -41,6 +41,8 @@
   body.elder .only-own { display: none; }
   .only-elder { display: none; }
   body.elder .only-elder { display: grid; }
+  body.elder p.only-elder { display: block; }        /* 글 문단은 줄이 끊기지 않게 */
+  body.elder span.only-elder { display: inline; }
   .kid { background: #fff4e5; border: 1px solid #f0c36a; border-radius: 12px; padding: 12px 14px; gap: 8px; }
   .kid.done { background: #e7f6ee; border-color: #9fd8b5; }
   .ss-list { display: grid; gap: 6px; max-height: 520px; overflow: auto; }
