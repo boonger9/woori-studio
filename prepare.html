@@ -237,7 +237,7 @@ import { loadBackendConfig, saveBackendConfig, callGas, loadMemberNames } from "
 import { loadCatalog, hymnTitle, responsiveTitle, fixNumberByTitle, maskNames, unmask, parseAiJson, buildUserMessage,
          parseManuscriptTitle, isFirstSunday, isFourthSunday, isFifthSunday, PASTOR, ELDER, buildPassageMessage,
          koreanDate, buildWorshipItems, mediaNeeds } from "./js/worship.js";
-import { findSermonSlides, fillVerseText, passageSlides } from "./js/sermon.js";
+import { findSermonSlides, fillVerseText, passageSlides, passageBook, bookName } from "./js/sermon.js";
 import { THEMES, FIXED_DEFAULT, defaultTheme, defaultIssueNo, defaultHeidelberg, buildBulletinData } from "./js/bulletin-data.js";
 import { saveDeck, nextSunday } from "./js/deck.js";
 import { loadManifest } from "./js/media.js";
@@ -634,6 +634,12 @@ requireLogin($("gate"), async () => {
     if (!w.prayer) p.push("대표기도");
     if (!w.sermonTitle) p.push("설교 제목");
     if (w.isElder && !w.passage) p.push("본문");
+    // 원로목사님 주일: 설교 중 화면이 본문과 다른 책이면 (예전 원고 구절이 남은 경우) 멈춤
+    if (w.isElder && w.passage) {
+      const pb = passageBook(w.passage);
+      const other = (w.sermonSlides || []).filter((x) => x.on && x.kind === "verse" && pb && x.book !== pb);
+      if (other.length) p.push(`설교 중 화면이 본문(${bookName(pb)})과 다릅니다 — [본문 구절로 설교 중 화면 만들기]를 누르세요`);
+    }
     const bad = [...document.querySelectorAll(".hymn .t.bad")].filter((el) => el.offsetParent !== null);
     if (bad.length) p.push("빨간 표시 번호 확인");
     return p;
