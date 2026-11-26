@@ -194,6 +194,13 @@
       </div>
     </div>
     <div style="display:grid;gap:10px;border-top:1px solid var(--line);padding-top:12px">
+      <b>콘티 <span class="hint" style="font-weight:400">— 반주자·찬양팀용 악보 모음 (찬양/콘티 폴더)</span></b>
+      <p class="hint">찬양예배(넷째 주)와 오후 예배에서 고른 찬양의 악보를 <b>찬양/악보 폴더</b>에서 제목으로 찾아,
+        <b>A4 가로 · 여백 1cm</b> 구글 문서에 <b>두 장씩 나란히</b> 넣습니다. 악보 이미지 이름은 곡 제목으로 (여러 장이면 제목_1, 제목_2). 확정할 때도 자동으로 만들어집니다.</p>
+      <div id="conti-list" style="display:grid;gap:4px;font-size:14px"></div>
+      <div class="row"><button class="btn" id="conti-check">악보 찾아 보기</button><button class="btn primary" id="conti-make">콘티 만들기</button><span id="conti-msg" class="hint"></span></div>
+    </div>
+    <div style="display:grid;gap:10px;border-top:1px solid var(--line);padding-top:12px">
       <b>주보</b>
       <div class="grid2">
         <label class="f">주보 색 <select id="b-theme"></select></label>
@@ -253,12 +260,13 @@ import { loadCatalog, hymnTitle, responsiveTitle, fixNumberByTitle, maskNames, u
          parseManuscriptTitle, isFirstSunday, isFourthSunday, isFifthSunday, PASTOR, ELDER, buildPassageMessage,
          koreanDate, buildWorshipItems, mediaNeeds } from "./js/worship.js";
 import { findSermonSlides, fillVerseText, passageSlides, passageBook, bookName } from "./js/sermon.js";
+import { matchScores, contiSets, cleanTitle } from "./js/conti.js";
 import { THEMES, FIXED_DEFAULT, defaultTheme, defaultIssueNo, defaultHeidelberg, buildBulletinData } from "./js/bulletin-data.js";
 import { saveDeck, nextSunday } from "./js/deck.js";
 import { loadManifest } from "./js/media.js";
 
 const $ = (id) => document.getElementById(id);
-let manuscriptInfo = null, maskMap = [], gospelSongs = [], gospelPicked = [], gospelAfter = null, sermonSlides = [], schoolDoc = null, pmSongs = [null, null];
+let manuscriptInfo = null, maskMap = [], gospelSongs = [], gospelPicked = [], gospelAfter = null, sermonSlides = [], schoolDoc = null, pmSongs = [null, null], scoresCache = null, contiDoc = null;
 
 function toast(msg, isErr) {
   const t = document.createElement("div");
@@ -427,6 +435,7 @@ requireLogin($("gate"), async () => {
       if (typeof w.isElder === "boolean") $("is-elder").checked = w.isElder;
       $("kid-ready").checked = !!w.kidReady; applyElder();
       $("elder-notes").value = w.elderNotes || ""; schoolDoc = w.schoolDoc || null; showSchoolDoc();
+      contiDoc = w.contiDoc || null; $("conti-msg").textContent = ""; showContiDoc();
       gospelPicked = w.gospel || []; gospelAfter = w.gospelAfter || null; renderGospel();
       const pm = w.afternoon || {}; $("pm-on").checked = pm.on !== false; v("pm-title", pm.title); pmSongs = [(pm.songs || [])[0] || null, (pm.songs || [])[1] || null];
       if (w.manuscript) { manuscriptInfo = w.manuscript; }
@@ -442,6 +451,7 @@ requireLogin($("gate"), async () => {
       sermonSlides = []; renderSermonSlides();
       $("kid-ready").checked = false; applyElder();
       $("elder-notes").value = ""; schoolDoc = null; showSchoolDoc();
+      contiDoc = null; $("conti-msg").textContent = "";
       v("b-issue", defaultIssueNo(d)); v("b-heid", defaultHeidelberg(d)); setTheme("");
     }
     refreshTitles(); renderPm();
@@ -627,6 +637,44 @@ requireLogin($("gate"), async () => {
     catch (e) { $("gospel-msg").textContent = e.message; }
   });
 
+  /* ----- 콘티: 고른 찬양의 악보 이미지를 모아 구글 문서로 ----- */
+  async function loadScores(fresh) {
+    if (fresh || !scoresCache) scoresCache = (await callGas("listScores")).scores || [];
+    return scoresCache;
+  }
+  function contiPlan(scores) {
+    return contiSets(collect()).map((set) => ({ label: set.label, songs: set.songs.map((x) => {
+      const m = matchScores(x.title, scores);
+      return { title: cleanTitle(x.title) + (x.role ? ` (${x.role})` : ""), scoreIds: m.map((y) => y.id), scoreNames: m.map((y) => y.name) };
+    }) }));
+  }
+  function renderConti(plan) {
+    $("conti-list").innerHTML = plan.length ? plan.map((set) => `<b>${esc(set.label)}</b>` + set.songs.map((x, i) =>
+      `<div>${i + 1}. ${esc(x.title)} — ${x.scoreIds.length ? `✅ ${esc(x.scoreNames.join(", "))}` : `<span style="color:var(--danger)">⚠ 악보 없음 (찬양/악보 폴더에 '${esc(x.title.replace(/ \(.*$/, ""))}' 이름으로 넣어 주세요)</span>`}</div>`).join("")).join("")
+      : `<p class="hint">찬양예배 곡이나 오후 예배 찬양을 고르면 여기에 나옵니다.</p>`;
+  }
+  function showContiDoc() {
+    if (contiDoc) $("conti-msg").innerHTML = `✅ <a href="${contiDoc.url}" target="_blank" rel="noopener">${esc(contiDoc.name)}</a> 열기`;
+  }
+  async function makeConti() {
+    const plan = contiPlan(await loadScores(true));
+    renderConti(plan);
+    if (!plan.length) throw new Error("콘티에 넣을 찬양이 없습니다 (찬양예배 곡이나 오후 예배 찬양을 고르세요)");
+    const r = await callGas("makeConti", { date: $("date").value, sets: plan.map((x) => ({ label: x.label, songs: x.songs.map(({ title, scoreIds }) => ({ title, scoreIds })) })) });
+    contiDoc = { url: r.url, name: r.name, at: Date.now() };
+    showContiDoc();
+    return r;
+  }
+  $("conti-check").onclick = () => busy($("conti-check"), async () => {
+    try { renderConti(contiPlan(await loadScores(true))); } catch (e) { $("conti-msg").textContent = e.message; }
+  });
+  $("conti-make").onclick = () => busy($("conti-make"), async () => {
+    try {
+      const r = await makeConti();
+      toast(r.missing && r.missing.length ? `콘티를 만들었습니다. 악보 없는 곡: ${r.missing.join(", ")}` : "콘티를 만들었습니다.", !!(r.missing && r.missing.length));
+    } catch (e) { $("conti-msg").textContent = e.message; toast("콘티를 만들지 못했습니다: " + e.message, true); }
+  });
+
   /* ----- 오후 예배: 제목 + 복음송가 두 곡 ----- */
   function renderPm() {
     $("pm-heid").textContent = $("b-heid").value || "?";
@@ -667,7 +715,7 @@ requireLogin($("gate"), async () => {
       gospelAfter: $("is-praise").checked ? gospelAfter : null,
       sermonSlides, manuscript: manuscriptInfo, updatedAt: Date.now(),
       bulletinTheme: themeValue(), issueNo: num("b-issue"), heidelberg: num("b-heid"),
-      pinned: [...pinned],
+      pinned: [...pinned], contiDoc,
       afternoon: { on: $("pm-on").checked, title: $("pm-title").value.trim(), songs: pmSongs.filter(Boolean) },
     };
   }
@@ -732,7 +780,12 @@ requireLogin($("gate"), async () => {
       await callGas("updateWeekly", { weekly: merged });
       $("done-box").hidden = false;
       $("done-note").className = "notice ok";
-      $("done-note").textContent = `확정했습니다. 슬라이드 ${items.length}개 항목을 저장했고, 악보 그림과 주보 PDF를 만들고 있습니다 (보통 4~6분).`;
+      $("done-note").textContent = `확정했습니다. 슬라이드 ${items.length}개 항목을 저장했고, 찬송·찬양 PPT 화면과 주보 PDF를 만들고 있습니다 (보통 4~6분).`;
+      // 콘티: 찬양예배·오후 예배 찬양이 있으면 함께 만듦 (실패해도 확정은 그대로)
+      if (contiSets(w).length) makeConti().then(async (r) => {
+        await setDoc(doc(db, "weeks", w.date), { ...collect(), confirmedAt: Date.now() });
+        toast(r.missing && r.missing.length ? `콘티도 만들었습니다. 악보 없는 곡: ${r.missing.join(", ")}` : "콘티도 만들었습니다.", !!(r.missing && r.missing.length));
+      }).catch((e) => { $("conti-msg").textContent = "콘티 실패: " + e.message; });
       $("done-box").scrollIntoView({ behavior: "smooth" });
       $("b-done").hidden = false; $("b-open").hidden = true; $("b-publish").hidden = true;
       $("b-remote").href = "print.html?date=" + w.date;
@@ -768,10 +821,10 @@ requireLogin($("gate"), async () => {
         }
       } else if (b && !b.ok) $("b-msg").textContent = "주보 PDF를 만들지 못했습니다: " + b.error;
       const mediaDone = dated && ready === total;
-      if (mediaDone) $("media-msg").textContent = "악보 준비 완료! 발표자 화면을 새로 고치면 바로 보입니다.";
+      if (mediaDone) $("media-msg").textContent = "찬송·찬양 PPT 화면 준비 완료! 발표자 화면을 새로 고치면 바로 보입니다.";
       if (mediaDone && b) return;
       if (Date.now() - started > 12 * 60e3) { $("media-msg").textContent = "12분이 지나도 끝나지 않았습니다. GitHub Actions 화면에서 '예배 스튜디오 배포' 결과를 확인해 주세요."; return; }
-      if (!mediaDone) $("media-msg").textContent = `악보 그림 만드는 중… (${Math.round((Date.now() - started) / 1000)}초 지남)`;
+      if (!mediaDone) $("media-msg").textContent = `찬송·찬양 PPT 화면 만드는 중… (${Math.round((Date.now() - started) / 1000)}초 지남)`;
       setTimeout(tick, 20000);
     };
     setTimeout(tick, 15000);

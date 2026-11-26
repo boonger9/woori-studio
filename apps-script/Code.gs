@@ -18,6 +18,8 @@ const CONFIG = {
   REVIEW_FOLDER_NAME: '주보pdf_검토',                        // 공개 폴더 '밖'에 둠
   MANUSCRIPT_ROOT_ID: '1aSimibEXebDadvWXjUZBaDnvsTofsu3Z',   // 생명의삶 (성경별 하위 폴더 포함)
   GOSPEL_FOLDER_ID: '1d3GKEymQU31452HXwA4QdVILwCMz9Z9m',     // 찬양/악보ppt (복음송가 송출용)
+  SCORE_FOLDER_ID: '11Rf8OKv9zp7vxSH_f9HvjmK17P1g0I4A',      // 찬양/악보 (악보 이미지, 곡 제목으로 이름)
+  CONTI_FOLDER_ID: '10Nfp-xyUM6xZCXtYHZaUYiyb9U8CJM76',      // 찬양/콘티 (주일마다 만드는 악보 모음 문서)
   SERMON_ART_FOLDER_ID: '1viIZBiPjNNnYiaqiPQ6sDbh3XvdE-GK0', // 설교/설교그림 (설교 중 띄울 그림·PPT, 날짜별 하위 폴더)
   SITE_DATA_FOLDER_NAME: '홈페이지데이터',
   MAX_PDF_BYTES: 20 * 1024 * 1024,
@@ -35,7 +37,7 @@ function doPost(e) {
       uploadBulletin: uploadBulletin_, publishBulletin: publishBulletin_, publishSermon: publishSermon_,
       listGospel: listGospel_, getGospelFile: getGospelFile_, getMediaFile: getGospelFile_,
       listSermonArt: listSermonArt_, saveBulletinData: saveBulletinData_, getBulletinData: getBulletinData_,
-      createSchoolDoc: createSchoolDoc_,
+      createSchoolDoc: createSchoolDoc_, listScores: listScores_, makeConti: makeConti_,
       aiGenerate: aiGenerate_, updateWeekly: updateWeekly_, ping: () => ({ ok: true, now: new Date().toISOString() })
     };
     const h = handlers[req.action];
@@ -145,7 +147,7 @@ function listGospel_() {
   walk_(DriveApp.getFolderById(CONFIG.GOSPEL_FOLDER_ID), '', (f, path) => {
     const t = f.getMimeType();
     if (/presentation|powerpoint|pdf|image\//.test(t)) {
-      out.push({ id: f.getId(), title: f.getName().replace(/\.(pptx?|pdf|jpe?g|png|webp)$/i, ''),
+      out.push({ id: f.getId(), title: f.getName().replace(/\.(pptx?|pdf|jpe?g|png|webp)$/i, '').replace(/_Wide.*$/i, '').replace(/\s*\(\d+\)\s*$/, '').trim(),
                  name: f.getName(), folder: path, mimeType: t, updated: f.getLastUpdated().toISOString() });
     }
   });
@@ -336,6 +338,76 @@ function createSchoolDoc_({ date, title, passage, passageText, notes, kidSermon 
   note.setItalic(true);
   doc.saveAndClose();
   return { ok: true, id: doc.getId(), name: name, url: 'https://docs.google.com/document/d/' + doc.getId() + '/edit' };
+}
+
+/* ---------- 콘티: 악보 이미지 모음 문서 ---------- */
+/** 찬양/악보 폴더의 악보 이미지 목록 (하위 폴더 포함) */
+function listScores_() {
+  const out = [];
+  walk_(DriveApp.getFolderById(CONFIG.SCORE_FOLDER_ID), '', (f) => {
+    if (/^image\//.test(f.getMimeType())) out.push({ id: f.getId(), name: f.getName() });
+  });
+  out.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+  return { ok: true, scores: out };
+}
+
+/**
+ * 콘티 문서 만들기: 찬양/콘티 폴더에 'YYMMDD 콘티' 구글 문서 (A4 가로, 여백 1cm, 악보 두 장씩 나란히)
+ * sets: [{ label: '온 세대 찬양예배', songs: [{ title, scoreIds: [...] }] }, { label: '오후 예배', ... }]
+ * 같은 이름 문서가 있으면 내용을 새로 바꿔 씀.
+ */
+function makeConti_({ date, sets }) {
+  const yymmdd = toYymmdd_(date);
+  const name = yymmdd + ' 콘티';
+  const folder = DriveApp.getFolderById(CONFIG.CONTI_FOLDER_ID);
+  const found = folder.getFilesByName(name);
+  let doc;
+  if (found.hasNext()) { doc = DocumentApp.openById(found.next().getId()); doc.getBody().clear(); }
+  else { doc = DocumentApp.create(name); DriveApp.getFileById(doc.getId()).moveTo(folder); }
+  const body = doc.getBody();
+  const CM = 28.3465;                       // 1cm = 28.35pt
+  const W = 841.89, H = 595.28;             // A4 가로
+  body.setPageWidth(W).setPageHeight(H).setMarginTop(CM).setMarginBottom(CM).setMarginLeft(CM).setMarginRight(CM);
+  const cellW = (W - 2 * CM) / 2 - 4, cellH = H - 2 * CM - 48;   // 위 제목 한 줄 + 표 뒤 빈 줄 자리를 뺌
+  const missing = [];
+  let first = true;
+  (sets || []).forEach((set) => {
+    const imgs = [];
+    (set.songs || []).forEach((song) => {
+      if (!song.scoreIds || !song.scoreIds.length) missing.push(song.title);
+      (song.scoreIds || []).forEach((id) => imgs.push(id));
+    });
+    if (!imgs.length) return;
+    const order = (set.songs || []).map((x, i) => (i + 1) + '. ' + x.title).join('   ');
+    for (let k = 0; k < imgs.length; k += 2) {
+      let hp;
+      if (first) { hp = body.getParagraphs()[0]; first = false; }
+      else {
+        // 표 뒤에 자동으로 붙는 빈 줄에 쪽 나눔을 넣어 빈 쪽이 생기지 않게
+        const last = body.getChild(body.getNumChildren() - 1);
+        if (last.getType() === DocumentApp.ElementType.PARAGRAPH) last.asParagraph().appendPageBreak(); else body.appendPageBreak();
+        hp = body.appendParagraph('');
+      }
+      hp.setText(date.replace(/-/g, '. ') + '  ' + (set.label || '') + (k === 0 ? '  |  ' + order : '  (이어서)'));
+      hp.setFontSize(9).setBold(false).setSpacingAfter(2).setSpacingBefore(0);
+      const table = body.appendTable([['', '']]);
+      table.setBorderWidth(0);
+      [0, 1].forEach((c) => {
+        const id = imgs[k + c];
+        const cell = table.getCell(0, c);
+        cell.setPaddingTop(0).setPaddingBottom(0).setPaddingLeft(2).setPaddingRight(2).setWidth(cellW + 4);
+        if (!id) return;
+        const p = cell.getChild(0).asParagraph();
+        p.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+        const img = p.appendInlineImage(DriveApp.getFileById(id).getBlob());
+        const r = Math.min(cellW / img.getWidth(), cellH / img.getHeight());
+        img.setWidth(Math.floor(img.getWidth() * r)).setHeight(Math.floor(img.getHeight() * r));
+      });
+    }
+  });
+  if (first) body.getParagraphs()[0].setText('악보 이미지를 찾지 못했습니다. 찬양/악보 폴더에 곡 제목으로 이미지를 넣어 주세요.');
+  doc.saveAndClose();
+  return { ok: true, name: name, url: 'https://docs.google.com/document/d/' + doc.getId() + '/edit', missing: missing };
 }
 
 /* 주보 내용(JSON)을 검토 폴더에 보관 → GitHub Actions가 받아 PDF로 만든 뒤 uploadBulletin으로 올림 */
