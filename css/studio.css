@@ -177,6 +177,7 @@ body.presenter { background: #0f1523; color: #e8ecf5; height: 100vh; overflow: h
 body.remote { background: #0f1523; color: #e8ecf5; min-height: 100vh; overscroll-behavior: none; }
 .rm { display: flex; flex-direction: column; gap: 12px; padding: 12px 12px calc(16px + env(safe-area-inset-bottom)); min-height: 100vh; }
 .rm > :last-child { margin-top: auto; } /* 이전·다음 버튼은 늘 맨 아래 */
+.rm-home { padding: 4px 12px; font-size: 13px; min-height: 0; }
 .rm-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .rm-top .pill { background: #1c2540; color: #b9c3dc; }
 .rm-top .pill.ok { background: #12392a; color: #6ee7a8; }
