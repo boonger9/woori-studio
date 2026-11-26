@@ -38,6 +38,11 @@
   .gospel-list label { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
   .order { font-size: 13px; color: var(--blue); font-weight: 700; min-width: 22px; }
   body.praise .only-regular { display: none; }
+  body.elder .only-own { display: none; }
+  .only-elder { display: none; }
+  body.elder .only-elder { display: grid; }
+  .kid { background: #fff4e5; border: 1px solid #f0c36a; border-radius: 12px; padding: 12px 14px; gap: 8px; }
+  .kid.done { background: #e7f6ee; border-color: #9fd8b5; }
   .ss-list { display: grid; gap: 6px; max-height: 520px; overflow: auto; }
   .ss-list label { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: start; padding: 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
   .ss-list label.off { opacity: .45; }
@@ -80,17 +85,27 @@
       <input type="date" id="date" style="max-width:200px">
       <label class="row" style="gap:6px"><input type="checkbox" id="is-communion"> 성찬 주일 (227장 1절만)</label>
       <label class="row" style="gap:6px"><input type="checkbox" id="is-praise"> 온 세대 찬양예배 (복음송가)</label>
+      <label class="row" style="gap:6px"><input type="checkbox" id="is-elder"> 원로목사님 설교 (다섯째 주 · 원고 없음)</label>
     </div>
     <p class="hint" id="date-hint"></p>
   </div>
 
   <!-- 2. 원고 -->
   <div class="box">
-    <h2><span class="n">2</span> 원고 불러오기</h2>
-    <p class="hint">생명의삶 폴더(성경별 하위 폴더 포함)에서 이 날짜의 원고를 찾습니다.</p>
-    <div class="row"><button class="btn primary" id="find">원고 찾기</button><span id="find-msg" class="hint"></span></div>
-    <div class="cand" id="cands"></div>
-    <div class="row" id="tab-row" hidden>
+    <h2><span class="n">2</span> <span class="only-own">원고 불러오기</span><span class="only-elder" style="display:none" id="h2-elder">설교 제목 · 본문 (원로목사님)</span></h2>
+    <div class="only-elder" style="gap:10px">
+      <p class="hint">이번 주는 <b>김용원 원로목사님</b>이 설교하십니다 (일반 예배 형식). 원고 없이 <b>받으신 제목과 본문만</b> 아래에 적으세요.
+        설교 후 찬송(봉헌송)을 주시면 4번의 <b>봉헌(설교 후)</b> 칸에 적으면 됩니다.</p>
+      <div class="kid" id="kid-box">
+        <b>⚠ 어린이 설교를 따로 준비해 주세요</b>
+        <span class="hint" style="color:inherit">원로목사님 원고가 없어서, 홈페이지 교회학교 자료(어린이 설교)가 자동으로 만들어지지 않습니다. 목사님이 직접 어린이 설교를 준비해야 합니다.</span>
+        <label class="row" style="gap:6px"><input type="checkbox" id="kid-ready"> 어린이 설교 준비 완료</label>
+      </div>
+    </div>
+    <p class="hint only-own">생명의삶 폴더(성경별 하위 폴더 포함)에서 이 날짜의 원고를 찾습니다.</p>
+    <div class="row only-own"><button class="btn primary" id="find">원고 찾기</button><span id="find-msg" class="hint"></span></div>
+    <div class="cand only-own" id="cands"></div>
+    <div class="row only-own" id="tab-row" hidden>
       <label class="f" style="flex:1">어느 탭이 최종 원고인가요? <select id="tab"></select></label>
       <button class="btn" id="load-tab">이 탭 불러오기</button>
     </div>
@@ -99,6 +114,7 @@
       <label class="f">설교 제목 <input type="text" id="sermon-title"></label>
       <label class="f">본문 <input type="text" id="passage" placeholder="예: 고후 1:3~7"></label>
     </div>
+    <div class="row only-elder" style="display:none"><button class="btn" id="ss-passage">본문 구절로 설교 중 화면 만들기</button><span class="hint">본문을 한 절씩 개역개정으로 띄웁니다.</span></div>
     <div id="ss-wrap" hidden style="display:grid;gap:8px">
       <b>설교 중 화면 <span class="tag" id="ss-count"></span></b>
       <p class="hint">설교 제목 다음에 <b>원고 순서대로</b> 나옵니다. 필요 없는 것은 체크를 끄세요.<br>
@@ -114,7 +130,8 @@
   <!-- 3. AI 추천 -->
   <div class="box">
     <h2><span class="n">3</span> AI 추천 (설교 요약 · 설교 전후 찬송 · 성시교독)</h2>
-    <p class="hint">출석부에 있는 성도 이름은 '성도1'처럼 가려서 Gemini에 보내고, 결과가 오면 다시 원래 이름으로 돌려놓습니다.</p>
+    <p class="hint only-own">출석부에 있는 성도 이름은 '성도1'처럼 가려서 Gemini에 보내고, 결과가 오면 다시 원래 이름으로 돌려놓습니다.</p>
+    <p class="hint only-elder" style="display:none">원고가 없으니 <b>제목과 본문 말씀</b>만으로 설교 전 찬송·봉헌(설교 후) 찬송·성시교독을 추천받습니다. 설교 요약은 만들지 않고, 주보 2쪽은 <b>성도들이 적는 말씀 메모 칸</b>으로 나갑니다.</p>
     <div class="row"><button class="btn primary" id="ai">AI 추천 받기</button><span id="ai-msg" class="hint"></span></div>
     <div class="notice" id="mask-note" hidden></div>
     <details id="manual-ai">
@@ -213,14 +230,14 @@
 import { requireLogin, db, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, where } from "./js/firebase.js";
 import { loadBackendConfig, saveBackendConfig, callGas, loadMemberNames } from "./js/backend.js";
 import { loadCatalog, hymnTitle, responsiveTitle, fixNumberByTitle, maskNames, unmask, parseAiJson, buildUserMessage,
-         parseManuscriptTitle, isFirstSunday, isFourthSunday, koreanDate, buildWorshipItems, mediaNeeds } from "./js/worship.js";
-import { findSermonSlides, fillVerseText } from "./js/sermon.js";
+         parseManuscriptTitle, isFirstSunday, isFourthSunday, isFifthSunday, PASTOR, ELDER, buildPassageMessage,
+         koreanDate, buildWorshipItems, mediaNeeds } from "./js/worship.js";
+import { findSermonSlides, fillVerseText, passageSlides } from "./js/sermon.js";
 import { THEMES, FIXED_DEFAULT, defaultTheme, defaultIssueNo, defaultHeidelberg, buildBulletinData } from "./js/bulletin-data.js";
 import { saveDeck, nextSunday } from "./js/deck.js";
 import { loadManifest } from "./js/media.js";
 
 const $ = (id) => document.getElementById(id);
-const PREACHER = "이상후 목사";
 let manuscriptInfo = null, maskMap = [], gospelSongs = [], gospelPicked = [], gospelAfter = null, sermonSlides = [];
 
 function toast(msg, isErr) {
@@ -306,8 +323,9 @@ requireLogin($("gate"), async () => {
     const d = $("date").value;
     $("is-communion").checked = isFirstSunday(d);
     $("is-praise").checked = isFourthSunday(d);
-    applyPraise();
-    $("date-hint").textContent = `${koreanDate(d)} · ${isFirstSunday(d) ? "첫째 주(성찬)" : isFourthSunday(d) ? "넷째 주(찬양예배)" : "일반 주일"} — 필요하면 위 칸을 직접 바꾸세요.`;
+    $("is-elder").checked = isFifthSunday(d);
+    applyPraise(); applyElder();
+    $("date-hint").textContent = `${koreanDate(d)} · ${isFirstSunday(d) ? "첫째 주(성찬)" : isFourthSunday(d) ? "넷째 주(찬양예배)" : isFifthSunday(d) ? "다섯째 주(원로목사님 설교 · 일반 예배)" : "일반 주일"} — 필요하면 위 칸을 직접 바꾸세요.`;
     await loadWeek(d);
   }
   $("date").onchange = onDate;
@@ -317,6 +335,21 @@ requireLogin($("gate"), async () => {
     document.body.classList.toggle("praise", on);
   }
   $("is-praise").onchange = applyPraise;
+  // 원로목사님 설교 주일: 원고 대신 제목·본문만, 어린이 설교 따로 준비
+  function applyElder() {
+    const on = $("is-elder").checked;
+    document.body.classList.toggle("elder", on);
+    document.querySelectorAll(".only-elder").forEach((el) => { el.style.display = on ? "" : "none"; });
+    $("kid-box").classList.toggle("done", $("kid-ready").checked);
+  }
+  $("is-elder").onchange = applyElder;
+  $("kid-ready").onchange = applyElder;
+  $("ss-passage").onclick = () => busy($("ss-passage"), async () => {
+    const list = await passageSlides($("passage").value);
+    if (!list.length) return toast("본문을 '고후 1:3~7'처럼 적어 주세요.", true);
+    sermonSlides = list; renderSermonSlides();
+    toast(`본문 ${list.length}절을 설교 중 화면에 넣었습니다.`);
+  });
 
   /* ----- 저장된 주간 자료 불러오기 / 지난주 기본값 ----- */
   async function loadWeek(d) {
@@ -334,6 +367,8 @@ requireLogin($("gate"), async () => {
       $("first-v1").checked = w.first ? !!w.first.firstVerseOnly : true;
       v("prayer", w.prayer); v("notices", w.notices);
       $("is-communion").checked = !!w.isCommunion; $("is-praise").checked = !!w.isPraise; applyPraise();
+      if (typeof w.isElder === "boolean") $("is-elder").checked = w.isElder;
+      $("kid-ready").checked = !!w.kidReady; applyElder();
       gospelPicked = w.gospel || []; gospelAfter = w.gospelAfter || null; renderGospel();
       if (w.manuscript) { manuscriptInfo = w.manuscript; }
       sermonSlides = w.sermonSlides || []; renderSermonSlides();
@@ -344,6 +379,7 @@ requireLogin($("gate"), async () => {
       $("notices").value = prevs[0]?.notices || "";
       gospelPicked = []; gospelAfter = null; renderGospel();
       sermonSlides = []; renderSermonSlides();
+      $("kid-ready").checked = false; applyElder();
       v("b-issue", defaultIssueNo(d)); v("b-heid", defaultHeidelberg(d)); setTheme("");
     }
     refreshTitles();
@@ -427,6 +463,15 @@ requireLogin($("gate"), async () => {
   /* ----- 3. AI ----- */
   let guide = null;
   async function preparePrompt() {
+    if ($("is-elder").checked) {      // 원고 없이 제목·본문만
+      const title = $("sermon-title").value.trim(), passage = $("passage").value.trim();
+      if (!title || !passage) throw new Error("먼저 2번에 설교 제목과 본문을 적어 주세요.");
+      const verses = await passageSlides(passage);
+      if (!verses.length) throw new Error("본문을 '고후 1:3~7'처럼 적어 주세요.");
+      guide = guide || await fetch("data/ai-guide.txt").then((r) => r.text());
+      maskMap = [];
+      return { system: guide, user: buildPassageMessage(title, passage, verses.map((x) => `${x.v1} ${x.text}`).join("\n")) };
+    }
     const text = $("manuscript").value.trim();
     if (text.length < 500) throw new Error("먼저 2번에서 원고를 불러와 주세요.");
     guide = guide || await fetch("data/ai-guide.txt").then((r) => r.text());
@@ -442,9 +487,11 @@ requireLogin($("gate"), async () => {
   }
   function applyAi(raw) {
     const r = unmask(parseAiJson(raw), maskMap);
-    if (r.summaryFull) $("sum-full").value = r.summaryFull;
-    if (r.summaryShort) $("sum-short").value = r.summaryShort;
-    if (r.meditation) { $("med1").value = r.meditation[0] || ""; $("med2").value = r.meditation[1] || ""; }
+    if (!$("is-elder").checked) {      // 원로목사님 주일에는 요약을 만들지 않음
+      if (r.summaryFull) $("sum-full").value = r.summaryFull;
+      if (r.summaryShort) $("sum-short").value = r.summaryShort;
+      if (r.meditation) { $("med1").value = r.meditation[0] || ""; $("med2").value = r.meditation[1] || ""; }
+    }
     const setH = (id, why, o, kind) => {
       if (!o || !o.no) return;
       // 번호와 제목이 서로 다르면, 제목으로 번호를 다시 찾는다 (AI가 번호를 헷갈리는 경우 대비)
@@ -513,8 +560,9 @@ requireLogin($("gate"), async () => {
     const num = (id) => (parseInt($(id).value, 10) || null);
     return {
       date: $("date").value, isCommunion: $("is-communion").checked, isPraise: $("is-praise").checked,
-      sermonTitle: $("sermon-title").value.trim(), passage: $("passage").value.trim(), preacher: PREACHER,
-      summaryFull: $("sum-full").value.trim(), summaryShort: $("sum-short").value.trim(),
+      sermonTitle: $("sermon-title").value.trim(), passage: $("passage").value.trim(),
+      preacher: $("is-elder").checked ? ELDER : PASTOR, isElder: $("is-elder").checked, kidReady: $("kid-ready").checked,
+      summaryFull: $("is-elder").checked ? "" : $("sum-full").value.trim(), summaryShort: $("is-elder").checked ? "" : $("sum-short").value.trim(),
       meditation: [$("med1").value.trim(), $("med2").value.trim()].filter(Boolean),
       prelude: [num("pre1"), num("pre2")].filter(Boolean),
       first: num("first") ? { no: num("first"), firstVerseOnly: $("first-v1").checked } : null,
@@ -543,6 +591,7 @@ requireLogin($("gate"), async () => {
     if (!w.offertory) p.push("봉헌송");
     if (!w.prayer) p.push("대표기도");
     if (!w.sermonTitle) p.push("설교 제목");
+    if (w.isElder && !w.passage) p.push("본문");
     const bad = [...document.querySelectorAll(".hymn .t.bad")].filter((el) => el.offsetParent !== null);
     if (bad.length) p.push("빨간 표시 번호 확인");
     return p;
@@ -555,6 +604,7 @@ requireLogin($("gate"), async () => {
     const w = collect();
     const p = problems(w);
     if (p.length) { toast("아직 비어 있거나 확인이 필요한 곳: " + p.join(", "), true); return; }
+    if (w.isElder && !w.kidReady && !confirm("이번 주는 원로목사님 설교 주일입니다.\n어린이 설교를 아직 '준비 완료'로 표시하지 않았습니다.\n\n그래도 확정할까요? (확정은 되고, 어린이 설교 알림은 계속 남습니다)")) return;
     try {
       // 1) 주간 자료 저장 (3단계 주보에서 사용)
       await setDoc(doc(db, "weeks", w.date), { ...w, confirmedAt: Date.now() });

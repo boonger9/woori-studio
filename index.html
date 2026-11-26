@@ -19,6 +19,7 @@
   <h1 style="margin:0 0 6px">예배 스튜디오</h1>
   <p style="margin:0 0 22px; color:var(--muted)">주보와 예배 슬라이드를 준비하고, 예배당 화면을 PC나 폰으로 넘깁니다.</p>
 
+  <div class="notice" id="kid-alert" hidden style="margin-bottom:16px;background:#fff4e5;border:1px solid #f0c36a;border-radius:12px;padding:14px 16px;line-height:1.7"></div>
   <div class="cards">
     <a class="card" href="presenter.html">
       <span class="tag">방송 담당자 · 예배당 PC</span>
@@ -54,7 +55,9 @@
 </div>
 
 <script type="module">
-import { auth, login, logout, isAllowed } from "./js/firebase.js";
+import { auth, login, logout, isAllowed, db, doc, getDoc } from "./js/firebase.js";
+import { nextSunday } from "./js/deck.js";
+import { isFifthSunday, koreanDate } from "./js/worship.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
 const who = document.getElementById("who"), btn = document.getElementById("auth-btn");
@@ -66,6 +69,17 @@ onAuthStateChanged(auth, (user) => {
   who.className = "pill " + (isAllowed(user) ? "ok" : "warn");
   who.textContent = isAllowed(user) ? user.email : `${user.email} (권한 없음)`;
   btn.textContent = "로그아웃"; btn.onclick = () => logout();
+  // 다섯째 주(원로목사님 설교)가 다가오면 어린이 설교 준비 알림
+  if (isAllowed(user)) {
+    const d = nextSunday();
+    if (isFifthSunday(d)) getDoc(doc(db, "weeks", d)).then((s) => {
+      const w = s.exists() ? s.data() : {};
+      if (w.kidReady || w.isElder === false) return;
+      const el = document.getElementById("kid-alert");
+      el.innerHTML = `<b>⚠ ${koreanDate(d)}은 다섯째 주 — 김용원 원로목사님 설교입니다.</b><br>원고가 없어 어린이 설교가 자동으로 만들어지지 않습니다. <b>어린이 설교를 따로 준비해 주세요.</b> 준비하셨으면 <a href="prepare.html">주간 준비</a>에서 '어린이 설교 준비 완료'에 체크하세요.`;
+      el.hidden = false;
+    }).catch(() => {});
+  }
 });
 </script>
 </body>

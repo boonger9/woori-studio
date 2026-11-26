@@ -158,3 +158,14 @@ export function sermonItems(list, section) {
     ? { section, type: "art", id: s.id, title: s.label || "설교 그림", sermon: true }
     : { section, type: "text", title: s.ref, body: s.text || "", sermon: true });
 }
+
+/** "고후 1:3~7" 같은 본문 표기 → 한 절씩 화면 후보 (원고 없이 본문만 있을 때) */
+export async function passageSlides(passage) {
+  REF.lastIndex = 0;
+  const m = REF.exec(String(passage || "").trim());
+  if (!m) return [];
+  const book = NAME_TO_BOOK.get(m[1]).book, ch = +m[2], v1 = +m[3], v2 = m[4] ? +m[4] : v1;
+  const items = [];
+  for (let v = v1; v <= Math.min(v2, v1 + 40); v++) items.push({ kind: "verse", book, ch, v1: v, v2: v, ref: refLabel({ book, ch, v1: v, v2: v }), quote: "", on: true });
+  return fillVerseText(items);
+}

@@ -86,6 +86,19 @@ export function parseManuscriptTitle(name) {
 export function weekOfMonth(date) { return Math.ceil(parseInt(date.slice(8, 10), 10) / 7); }
 export const isFirstSunday = (date) => weekOfMonth(date) === 1;   // 성찬
 export const isFourthSunday = (date) => weekOfMonth(date) === 4;  // 온 세대 찬양예배
+export const isFifthSunday = (date) => weekOfMonth(date) === 5;   // 원로목사님 설교 (일반 예배 형식)
+export const PASTOR = "이상후 목사";
+export const ELDER = "김용원 원로목사";
+
+/** 원고가 없을 때(원로목사님 설교): 제목·본문만으로 찬송·성시교독을 추천받는 메시지 */
+export function buildPassageMessage(title, passage, passageText) {
+  const h = Object.entries(catalog.hymns).map(([n, t]) => `${n}|${t}`).join("\n");
+  const r = Object.entries(catalog.responsive).map(([n, t]) => `${n}|${t}`).join("\n");
+  return `[찬송가 목록 (번호|제목)]\n${h}\n\n[교독문 목록 (번호|제목)]\n${r}\n\n` +
+    `=== 이번 주는 설교 원고가 없습니다 (원로목사님 설교) ===\n설교 제목: ${title}\n본문: ${passage}\n\n[본문 말씀]\n${passageText}\n\n` +
+    `※ 원고가 없으므로 summaryFull, summaryShort는 빈 문자열("")로, meditation은 빈 배열([])로 두세요. ` +
+    `themes, hymnBefore, hymnOffertory, responsive만 위 제목과 본문 말씀에 맞게 추천하세요. JSON 형식은 그대로입니다.`;
+}
 
 export function koreanDate(date) {
   const [y, m, d] = date.split("-").map(Number);

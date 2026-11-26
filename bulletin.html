@@ -96,6 +96,9 @@ b, strong, .b { font-weight: 700; }
 .memo .h { font-weight: 700; margin: .6em 0 .2em; break-after: avoid; color: var(--c); }
 .memo .title { font-weight: 700; font-size: 1.25em; margin: 0; color: var(--c); }
 .memo .pass { margin: 0 0 .6em; font-weight: 700; }
+.memo.lined { column-count: 1; display: grid; grid-template-rows: auto auto auto 1fr; }
+.memo .write { margin: 2mm 0 0; color: var(--c); font-weight: 700; font-size: .95em; }
+.memo .lines { background: linear-gradient(to top, var(--c-soft) 0, var(--c-soft) .35mm, transparent .35mm) 0 0 / 100% 10mm repeat-y; border-top: .35mm solid var(--c-soft); margin-top: 2mm; }
 .warn { position: absolute; right: 4mm; bottom: 2mm; color: #c0392b; font-size: 8pt; font-family: sans-serif; }
 @media print { .warn { display: none; } }
 
@@ -189,10 +192,14 @@ b, strong, .b { font-weight: 700; }
 </section>
 <section class="page p2">
   <div class="tab">주일 말씀 메모</div>
-  <div class="memo fitcol" data-max="13" data-min="8.5">
-    <p class="title">${esc(d.sermonTitle)}</p><p class="pass">${esc(d.passage)}</p>
+  ${String(d.summary || "").trim() ? `<div class="memo fitcol" data-max="13" data-min="8.5">
+    <p class="title">${esc(d.sermonTitle)}</p><p class="pass">${esc(d.passage)}${d.preacher && d.preacher !== "이상후 목사" ? " · " + esc(d.preacher) : ""}</p>
     ${memoHtml(d.summary)}
-  </div>
+  </div>` : `<div class="memo lined" style="font-size:12pt">
+    <p class="title">${esc(d.sermonTitle)}</p><p class="pass">${esc(d.passage)}${d.preacher ? " · " + esc(d.preacher) : ""}</p>
+    <p class="write">말씀을 들으며 깨달은 것, 붙잡고 싶은 말씀을 적어 보세요.</p>
+    <div class="lines"></div>
+  </div>`}
 </section>`;
     document.getElementById("map-img").src = mapSrc;
     return fitAll();
