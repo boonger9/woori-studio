@@ -15,7 +15,7 @@
 @page { size: 297mm 210mm; margin: 0; }
 :root { --c: #217fac; --c-light: #e4f1f8; --c-soft: #79b2cd; --ink: #24303a; }
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { font-family: "Maple", "Pretendard", sans-serif; font-weight: 300; color: var(--ink); background: #8a8f96; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 @media print { body { background: #fff; } .page { margin: 0 !important; box-shadow: none !important; } .tools { display: none !important; } }
 .page { width: 297mm; height: 210mm; background: #fff; margin: 10mm auto; box-shadow: 0 4px 24px rgba(0,0,0,.25); position: relative; overflow: hidden; page-break-after: always; break-after: page; }
@@ -209,7 +209,7 @@ b, strong, .b { font-weight: 700; }
 
   // 넘치면 글자를 조금씩 줄임 (너무 작아지면 경고)
   async function fitAll() {
-    try { await document.fonts.ready; } catch (e) {}
+    try { await Promise.all([document.fonts.load('300 10pt "Maple"', "가나"), document.fonts.load('700 10pt "Maple"', "가나")]); await document.fonts.ready; } catch (e) {}
     await Promise.all([...document.images].map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; })));
     const warns = [];
     document.querySelectorAll(".fit").forEach((el) => {
@@ -272,10 +272,15 @@ b, strong, .b { font-weight: 700; }
     if (!window.jspdf) await loadScript("assets/vendor/jspdf.umd.min.js");
     if (!window.html2canvas) await loadScript("assets/vendor/html2canvas-pro.min.js");
     if (document.fonts) await document.fonts.ready;
+    // 그림(로고·유튜브·QR·약도)이 다 불러와질 때까지 기다림 — 아이폰은 늦게 와서 빈칸으로 찍히는 일이 있음
+    const imgs = [...document.querySelectorAll(".page img")];
+    for (let t = 0; t < 100 && imgs.some((im) => !im.getAttribute("src") || !im.complete); t++) await new Promise((r) => setTimeout(r, 100));
+    await Promise.all(imgs.map((im) => (im.decode ? im.decode().catch(() => {}) : null)));
     const pdf = new window.jspdf.jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
     const pages = [...document.querySelectorAll(".page")];
     for (let i = 0; i < pages.length; i++) {
-      const cv = await window.html2canvas(pages[i], { scale: 3, backgroundColor: "#ffffff", useCORS: true, logging: false });
+      const cv = await window.html2canvas(pages[i], { scale: 3, backgroundColor: "#ffffff", useCORS: true, logging: false,
+        ignoreElements: (el) => el.classList && (el.classList.contains("warn") || el.classList.contains("tools")) });
       if (i) pdf.addPage();
       pdf.addImage(cv.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 297, 210, undefined, "FAST");
     }

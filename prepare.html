@@ -380,6 +380,7 @@ requireLogin($("gate"), async () => {
     try {
       const data = buildBulletinData(collect(), readFixed());
       const w = await bulletinFrame();
+      if (w.document.fonts) await w.document.fonts.ready;
       const warns = await w.renderBulletin(data);
       const blob = await w.makeBulletinPdf();
       iosPdf = new File([blob], `주보_${$("date").value}.pdf`, { type: "application/pdf" });
