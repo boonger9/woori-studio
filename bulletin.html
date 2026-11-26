@@ -109,7 +109,9 @@ b, strong, .b { font-weight: 700; }
 <body>
 <div class="tools" id="tools" hidden>
   <span id="tools-msg">주보 미리보기 (실제 PDF와 같은 틀)</span>
-  <button onclick="window.print()">🖨 인쇄 / PDF로 저장</button>
+  <button id="print-btn">🖨 인쇄 / PDF로 저장</button>
+  <button id="ios-print" hidden>🖨 인쇄하기</button>
+  <button id="ios-open" hidden>PDF 열기</button>
   <span style="opacity:.8">양면 인쇄는 '짧은 가장자리로 넘기기'</span>
 </div>
 <div id="root"></div>
@@ -262,6 +264,44 @@ b, strong, .b { font-weight: 700; }
     });
   }
 
+  /* ---- 아이폰·아이패드: 사파리가 웹페이지 인쇄 때 여백·머리글을 넣어 쪽이 밀리므로,
+         주보를 그림으로 떠서 A4 가로 PDF를 만들고 그 PDF를 인쇄 ---- */
+  const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const loadScript = (src) => new Promise((ok, bad) => { const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = () => bad(new Error(src + " 불러오기 실패")); document.head.appendChild(sc); });
+  async function makePdfBlob() {
+    if (!window.jspdf) await loadScript("assets/vendor/jspdf.umd.min.js");
+    if (!window.html2canvas) await loadScript("assets/vendor/html2canvas-pro.min.js");
+    if (document.fonts) await document.fonts.ready;
+    const pdf = new window.jspdf.jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
+    const pages = [...document.querySelectorAll(".page")];
+    for (let i = 0; i < pages.length; i++) {
+      const cv = await window.html2canvas(pages[i], { scale: 3, backgroundColor: "#ffffff", useCORS: true, logging: false });
+      if (i) pdf.addPage();
+      pdf.addImage(cv.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 297, 210, undefined, "FAST");
+    }
+    return pdf.output("blob");
+  }
+  async function iosPrint() {
+    const msg = document.getElementById("tools-msg");
+    document.getElementById("print-btn").hidden = true;
+    msg.textContent = "인쇄용 PDF 만드는 중… (5~10초)";
+    try {
+      const blob = await makePdfBlob();
+      const file = new File([blob], "주보.pdf", { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const share = document.getElementById("ios-print"), open = document.getElementById("ios-open");
+      const canShare = navigator.canShare && navigator.canShare({ files: [file] });
+      share.hidden = !canShare; open.hidden = false;
+      share.onclick = () => navigator.share({ files: [file] }).catch(() => {});
+      open.onclick = () => { location.href = url; };
+      msg.textContent = canShare ? "✅ 준비 완료 → [인쇄하기] → 프린트" : "✅ 준비 완료 → [PDF 열기] → 공유(□↑) → 프린트";
+    } catch (e) {
+      msg.textContent = "⚠ PDF를 만들지 못했습니다: " + e.message; document.getElementById("print-btn").hidden = false;
+    }
+  }
+  document.getElementById("print-btn").onclick = () => (IOS ? iosPrint() : window.print());
+  window.makeBulletinPdf = makePdfBlob;
+
   window.renderBulletin = render;
   // 주간 준비 화면에서 [주보 미리보기]로 열었을 때
   try {
@@ -271,7 +311,7 @@ b, strong, .b { font-weight: 700; }
       render(JSON.parse(raw)).then((w) => {
         if (w.length) document.getElementById("tools-msg").textContent = "⚠ " + w.join(" · ");
         // [주보 인쇄]로 열었으면 다 그린 뒤 인쇄 창을 바로 띄움
-        if (/[?&]print\b/.test(location.search)) setTimeout(() => window.print(), 300);
+        if (/[?&]print\b/.test(location.search)) setTimeout(() => (IOS ? iosPrint() : window.print()), 300);
       });
     }
   } catch (e) { console.error(e); }
