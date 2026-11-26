@@ -198,6 +198,7 @@
         <a class="btn" id="b-open" target="_blank" rel="noopener" hidden>① 검토본 PDF 열어 보기</a>
         <button class="btn primary" id="b-publish" hidden>② 홈페이지에 올리기</button>
         <button class="btn" id="b-print2">🖨 주보 인쇄</button>
+        <a class="btn" id="b-remote" href="print.html">📱 다른 컴퓨터로 인쇄 보내기</a>
       </div>
     </div>
   </div>
@@ -583,6 +584,7 @@ requireLogin($("gate"), async () => {
       $("done-note").textContent = `확정했습니다. 슬라이드 ${items.length}개 항목을 저장했고, 악보 그림과 주보 PDF를 만들고 있습니다 (보통 4~6분).`;
       $("done-box").scrollIntoView({ behavior: "smooth" });
       $("b-done").hidden = false; $("b-open").hidden = true; $("b-publish").hidden = true;
+      $("b-remote").href = "print.html?date=" + w.date;
       $("b-msg").textContent = "주보 PDF를 만드는 중입니다… (악보와 함께 4~6분)";
       $("b-publish").onclick = () => busy($("b-publish"), async () => {
         try {

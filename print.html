@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>주보 인쇄 · 예배 스튜디오</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/studio.css">
+<style>
+  .wrap { max-width: 560px; margin: 0 auto; padding: 18px 14px 80px; display: grid; gap: 14px; }
+  .box { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; }
+  .box h2 { margin: 0; font-size: 18px; }
+  .hint { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 0; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  input[type=date], input[type=number] { font: inherit; padding: 10px 12px; border: 1px solid #d5d9e0; border-radius: 10px; }
+  input[type=number] { width: 90px; }
+  .st { display: grid; gap: 8px; }
+  .st label { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; font-size: 17px; }
+  .st label.off { opacity: .5; }
+  .st small { color: var(--muted); font-size: 13px; }
+  .pill.on { background: #e7f6ee; color: var(--ok); }
+  .send { width: 100%; padding: 16px; font-size: 18px; }
+  .status { font-size: 16px; font-weight: 700; padding: 12px; border-radius: 10px; background: #f6f7f9; }
+  .status.ok { background: #e7f6ee; color: var(--ok); }
+  .status.err { background: #fdecea; color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="gate" id="gate" hidden></div>
+<div class="wrap" id="app" hidden>
+  <div class="row" style="justify-content:space-between"><a class="btn" href="index.html">← 홈</a><b>주보 인쇄</b><span></span></div>
+
+  <div class="box">
+    <div class="row">
+      <label>주보 날짜 <input type="date" id="date"></label>
+      <label>매수 <input type="number" id="copies" min="1" max="50" value="1"></label>
+    </div>
+    <p class="hint" id="week-msg"></p>
+  </div>
+
+  <div class="box">
+    <h2>① 다른 컴퓨터로 보내기 (원격 인쇄)</h2>
+    <p class="hint">'주보 인쇄 대기' 화면을 켜 둔 컴퓨터가 받아서 그 컴퓨터의 프린터로 인쇄합니다. 🟢는 지금 켜져 있는 컴퓨터입니다.</p>
+    <div class="st" id="stations"><p class="hint">컴퓨터 목록을 불러오는 중…</p></div>
+    <button class="btn primary send" id="send" disabled>🖨 이 컴퓨터로 인쇄 보내기</button>
+    <div class="status" id="status" hidden></div>
+  </div>
+
+  <div class="box">
+    <h2>② 이 폰에서 직접 인쇄</h2>
+    <p class="hint">지금 있는 곳의 <b>와이파이 프린터</b>로 인쇄합니다 (폰과 프린터가 같은 와이파이). 주보 PDF가 열리면 아이폰은 <b>공유(□↑) → 프린트</b>, 안드로이드는 <b>⋮ → 인쇄</b>.</p>
+    <a class="btn" id="pdf" target="_blank" rel="noopener">주보 PDF 열기</a>
+  </div>
+</div>
+
+<script type="module">
+import { requireLogin, db, doc, getDoc, setDoc, onSnapshot, collection, getDocs } from "./js/firebase.js";
+import { nextSunday } from "./js/deck.js";
+
+const $ = (id) => document.getElementById(id);
+const ONLINE_MS = 90e3;
+let manifest = {}, stations = [], picked = null, stopWatch = null;
+
+async function loadStations() {
+  const r = await getDocs(collection(db, "printStations"));
+  stations = r.docs.map((d) => d.data()).filter((s) => s && s.id)
+    .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+  const now = Date.now();
+  if (!stations.length) {
+    $("stations").innerHTML = `<p class="hint">아직 '주보 인쇄 대기'를 켠 컴퓨터가 없습니다. 교회 PC나 노트북에서 홈 → <b>주보 인쇄 대기</b>를 한 번 열어 주세요.</p>`;
+  } else {
+    $("stations").innerHTML = stations.map((s) => {
+      const on = now - (s.lastSeen || 0) < ONLINE_MS;
+      const ago = Math.round((now - (s.lastSeen || 0)) / 60e3);
+      return `<label class="${on ? "" : "off"}"><input type="radio" name="st" value="${s.id}" ${picked === s.id ? "checked" : ""} ${on ? "" : "disabled"}>
+        <span>${String(s.name).replace(/</g, "&lt;")}<br><small>${on ? (s.busy ? "인쇄 중" : "대기 중") : `꺼져 있음 (${ago < 60 ? ago + "분" : Math.round(ago / 60) + "시간"} 전 마지막 연결)`}</small></span>
+        <span class="pill ${on ? "on" : ""}">${on ? "🟢" : "⚪"}</span></label>`;
+    }).join("");
+    if (!picked) { const first = stations.find((s) => now - (s.lastSeen || 0) < ONLINE_MS); if (first) { picked = first.id; const r2 = document.querySelector(`input[value="${first.id}"]`); if (r2) r2.checked = true; } }
+  }
+  $("send").disabled = !picked;
+}
+
+async function checkWeek() {
+  const d = $("date").value;
+  const w = await getDoc(doc(db, "weeks", d)).catch(() => null);
+  $("week-msg").textContent = w && w.exists() ? `✅ ${d} 주보 자료가 저장되어 있습니다.` : `⚠ ${d} 주보 자료가 아직 없습니다. 주간 준비에서 저장·확정해야 인쇄할 수 있습니다.`;
+  const b = manifest.bulletin;
+  $("pdf").hidden = !(b && b.ok && b.url && b.date === d);
+  if (b && b.url) $("pdf").href = b.url;
+}
+
+requireLogin($("gate"), async () => {
+  $("app").hidden = false;
+  try { manifest = await (await fetch("media/manifest.json", { cache: "no-store" })).json(); } catch (e) {}
+  const qd = new URLSearchParams(location.search).get("date");
+  $("date").value = qd || (manifest.bulletin && manifest.bulletin.date) || nextSunday();
+  $("date").onchange = checkWeek;
+  await checkWeek();
+  await loadStations();
+  setInterval(loadStations, 20e3);
+  $("stations").onchange = (e) => { if (e.target.name === "st") { picked = e.target.value; $("send").disabled = false; } };
+
+  $("send").onclick = async () => {
+    if (!picked) return;
+    const st = stations.find((s) => s.id === picked) || {};
+    const job = { id: "job-" + Date.now(), date: $("date").value, copies: Math.max(1, Math.min(50, +$("copies").value || 1)),
+                  status: "pending", at: Date.now(), by: "phone" };
+    $("send").disabled = true;
+    $("status").hidden = false; $("status").className = "status"; $("status").textContent = `'${st.name}'(으)로 보내는 중…`;
+    await setDoc(doc(db, "printJobs", picked), job);
+    if (stopWatch) stopWatch();
+    const timer = setTimeout(() => { $("status").className = "status err"; $("status").textContent = "1분이 지나도 응답이 없습니다. 그 컴퓨터가 켜져 있고 '주보 인쇄 대기' 화면이 열려 있는지 확인해 주세요."; $("send").disabled = false; }, 60e3);
+    stopWatch = onSnapshot(doc(db, "printJobs", picked), (s) => {
+      const j = s.exists() ? s.data() : null;
+      if (!j || j.id !== job.id) return;
+      const msg = { pending: "보냈습니다. 컴퓨터가 받기를 기다리는 중…", printing: `'${st.name}'에서 인쇄 중…`,
+        done: `✅ 인쇄를 보냈습니다 (${j.copies}부).` + (j.message ? ` ⚠ ${j.message}` : ""),
+        failed: `❌ 인쇄 실패: ${j.message || ""}`, expired: "⏱ 너무 늦게 받아 인쇄하지 않았습니다." }[j.status];
+      $("status").textContent = msg || j.status;
+      $("status").className = "status" + (j.status === "done" ? " ok" : j.status === "failed" || j.status === "expired" ? " err" : "");
+      if (["done", "failed", "expired"].includes(j.status)) { clearTimeout(timer); $("send").disabled = false; }
+      else if (j.status === "printing") clearTimeout(timer);
+    });
+  };
+});
+</script>
+</body>
+</html>

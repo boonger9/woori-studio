@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>주보 인쇄 대기 · 예배 스튜디오</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/studio.css">
+<style>
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; display: grid; gap: 16px; }
+  .box { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 12px; }
+  .box h2 { margin: 0; font-size: 19px; }
+  .hint { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 0; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  input[type=text] { font: inherit; padding: 10px 12px; border: 1px solid #d5d9e0; border-radius: 10px; min-width: 240px; }
+  .big { font-size: 22px; font-weight: 800; display: flex; gap: 12px; align-items: center; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; background: #9aa4b6; flex: none; }
+  .dot.on { background: #1f9d55; box-shadow: 0 0 0 6px rgba(31,157,85,.15); animation: pulse 2s infinite; }
+  .dot.busy { background: #e0a100; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 10px rgba(31,157,85,.05); } }
+  .log { display: grid; gap: 6px; font-size: 14px; max-height: 280px; overflow: auto; }
+  .log div { padding: 8px 10px; background: #f6f7f9; border-radius: 8px; }
+  .log .err { background: #fdecea; color: var(--danger); }
+  ol { margin: 0; padding-left: 20px; line-height: 1.9; }
+  code { background: #f1f3f6; padding: 2px 6px; border-radius: 6px; }
+  #frame { position: fixed; left: -4000px; top: 0; width: 1400px; height: 1000px; border: 0; }
+</style>
+</head>
+<body>
+<div id="gate" class="gate"></div>
+<div class="wrap" id="app" hidden>
+  <div class="row" style="justify-content:space-between">
+    <a class="btn" href="index.html">← 홈</a>
+    <b>주보 인쇄 대기</b>
+    <span></span>
+  </div>
+
+  <div class="box">
+    <div class="big"><span class="dot" id="dot"></span><span id="state">준비 중…</span></div>
+    <p class="hint" id="state-sub">이 화면을 열어 두면, 폰의 <b>[주보 인쇄]</b>에서 보낸 인쇄를 이 컴퓨터가 받아 프린터로 보냅니다.</p>
+    <div class="row">
+      <label>이 컴퓨터 이름 <input type="text" id="name" placeholder="예: 사무실 노트북, 교회 PC"></label>
+      <button class="btn" id="save-name">이름 저장</button>
+      <button class="btn" id="test">시험 인쇄 (1부)</button>
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>최근 인쇄</h2>
+    <div class="log" id="log"><div>아직 받은 인쇄가 없습니다.</div></div>
+  </div>
+
+  <div class="box">
+    <h2>처음 한 번만: 자동 인쇄 바로가기 만들기</h2>
+    <p class="hint">보통 크롬은 인쇄할 때마다 [인쇄] 버튼을 사람이 눌러야 합니다. 아래 바로가기로 열면 <b>인쇄 창 없이 기본 프린터로 바로</b> 나갑니다 (크롬의 자동 인쇄 모드).</p>
+    <ol>
+      <li><b>기본 프린터 정하기</b> — 윈도우: 설정 → 블루투스 및 장치 → 프린터 및 스캐너 → 교회 프린터 → <b>기본값으로 설정</b>. 같은 곳의 <b>인쇄 기본 설정</b>에서 <b>양면 · 짧은 가장자리</b>로 맞춰 두세요.</li>
+      <li><b>바로가기 받기</b> — 윈도우: <a href="assets/print/woori-print-station.bat" download>woori-print-station.bat</a> · 맥: <a href="assets/print/woori-print-station.command" download>woori-print-station.command</a> 를 내려받아 <b>바탕화면</b>에 둡니다.</li>
+      <li><b>열기</b> — 바로가기를 두 번 누릅니다. 평소 쓰는 크롬과 <b>별개인 '인쇄 전용' 크롬 창</b>이 열립니다 (평소 크롬은 그대로 써도 됩니다). 맥은 처음 한 번 파일을 <b>우클릭 → 열기</b>로 여세요.</li>
+      <li><b>로그인·이름</b> — 그 창에서 Google 로그인 → 위에 이 컴퓨터 이름을 적고 [이름 저장] → <b>[시험 인쇄]</b>로 확인.</li>
+      <li>이후에는 컴퓨터를 켤 때 바로가기만 눌러 두면 됩니다. <b>절전 모드</b>가 되면 인쇄를 못 받으니, 전원 설정에서 '절전 안 함'으로 두면 좋습니다.</li>
+    </ol>
+  </div>
+</div>
+<iframe id="frame" src="bulletin.html?blank" title="주보 그리기"></iframe>
+
+<script type="module">
+import { requireLogin, db, doc, getDoc, setDoc, onSnapshot } from "./js/firebase.js";
+import { keepAwake } from "./js/live.js";
+import { buildBulletinData, FIXED_DEFAULT } from "./js/bulletin-data.js";
+
+const $ = (id) => document.getElementById(id);
+const KEY = "woori-studio:print-station";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let me = JSON.parse(localStorage.getItem(KEY) || "null");
+if (!me) { me = { id: "st-" + Math.random().toString(36).slice(2, 10), name: "" }; localStorage.setItem(KEY, JSON.stringify(me)); }
+
+function log(msg, err) {
+  const box = $("log");
+  if (box.firstElementChild && box.firstElementChild.textContent.startsWith("아직")) box.innerHTML = "";
+  const d = document.createElement("div"); if (err) d.className = "err";
+  d.textContent = `${new Date().toLocaleTimeString("ko-KR")} · ${msg}`;
+  box.prepend(d);
+}
+function setState(kind, text) { $("dot").className = "dot " + kind; $("state").textContent = text; }
+
+/** 날짜의 주보 데이터 (주간 준비에서 저장한 것 + 주보 고정 내용) */
+async function bulletinFor(date) {
+  const w = await getDoc(doc(db, "weeks", date));
+  if (!w.exists()) throw new Error(`${date} 주보가 아직 저장되지 않았습니다 (주간 준비에서 저장·확정하세요)`);
+  const f = await getDoc(doc(db, "config", "bulletin")).catch(() => null);
+  return buildBulletinData({ date, ...w.data() }, f && f.exists() ? { ...FIXED_DEFAULT, ...f.data() } : null);
+}
+async function frameReady() {
+  for (let i = 0; i < 100; i++) { const w = $("frame").contentWindow; if (w && w.renderBulletin) return w; await sleep(100); }
+  throw new Error("주보 틀을 불러오지 못했습니다");
+}
+/** 주보를 그려서 copies부 인쇄 (자동 인쇄 모드면 창 없이 바로 나감) */
+async function printBulletin(date, copies) {
+  const win = await frameReady();
+  const data = await bulletinFor(date);
+  const warns = await win.renderBulletin(data);
+  for (let i = 0; i < copies; i++) { win.focus(); win.print(); await sleep(1500); }
+  return warns || [];
+}
+
+let busyNow = false;
+const seen = new Set();
+async function handle(job) {
+  if (!job || job.status !== "pending" || seen.has(job.id) || busyNow) return;
+  seen.add(job.id);
+  const ref = doc(db, "printJobs", me.id);
+  if (Date.now() - (job.at || 0) > 15 * 60e3) {       // 너무 오래된 요청은 인쇄하지 않음
+    await setDoc(ref, { ...job, status: "expired", message: "15분이 지나 인쇄하지 않았습니다" });
+    return;
+  }
+  busyNow = true; setState("busy", `인쇄 중… (${job.date} 주보 ${job.copies}부)`);
+  await setDoc(ref, { ...job, status: "printing", startedAt: Date.now() });
+  try {
+    const warns = await printBulletin(job.date, Math.max(1, Math.min(50, job.copies || 1)));
+    await setDoc(ref, { ...job, status: "done", doneAt: Date.now(), message: warns.join(", ") });
+    log(`${job.date} 주보 ${job.copies}부 인쇄 보냄` + (warns.length ? ` (⚠ ${warns.join(", ")})` : ""));
+  } catch (e) {
+    await setDoc(ref, { ...job, status: "failed", doneAt: Date.now(), message: e.message });
+    log(`인쇄 실패: ${e.message}`, true);
+  } finally {
+    busyNow = false; setState("on", `대기 중 — ${me.name || "이름 없는 컴퓨터"}`);
+  }
+}
+
+requireLogin($("gate"), async () => {
+  $("app").hidden = false;
+  $("name").value = me.name;
+  keepAwake();   // 화면이 꺼지지 않게 (절전 모드는 컴퓨터 설정에서)
+
+  // 살아 있다는 신호 (폰에서 '대기 중 🟢'으로 보임)
+  const beat = () => setDoc(doc(db, "printStations", me.id), { id: me.id, name: me.name || "이름 없는 컴퓨터", lastSeen: Date.now(), busy: busyNow })
+    .catch((e) => setState("", "연결 오류: " + e.message));
+  await beat(); setInterval(beat, 30e3);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) beat(); });
+
+  $("save-name").onclick = async () => {
+    me.name = $("name").value.trim(); localStorage.setItem(KEY, JSON.stringify(me)); await beat();
+    setState("on", `대기 중 — ${me.name || "이름 없는 컴퓨터"}`); log(`이름을 '${me.name}'(으)로 저장했습니다`);
+  };
+  $("test").onclick = async () => {
+    let date = "";
+    try { const m = await (await fetch("media/manifest.json", { cache: "no-store" })).json(); date = (m.bulletin && m.bulletin.date) || (m.dates || [])[0] || ""; } catch (e) {}
+    if (!date) return log("시험할 주보 날짜를 찾지 못했습니다 (먼저 주간 준비에서 확정하세요)", true);
+    try { setState("busy", "시험 인쇄 중…"); await printBulletin(date, 1); log(`시험 인쇄: ${date} 주보 1부 보냄`); }
+    catch (e) { log("시험 인쇄 실패: " + e.message, true); }
+    finally { setState("on", `대기 중 — ${me.name || "이름 없는 컴퓨터"}`); }
+  };
+
+  setState("on", `대기 중 — ${me.name || "이름 없는 컴퓨터"}`);
+  if (!me.name) $("state-sub").innerHTML = "먼저 아래에 <b>이 컴퓨터 이름</b>을 적고 [이름 저장]을 누르세요. 폰에서 이 이름으로 보입니다.";
+  onSnapshot(doc(db, "printJobs", me.id), (s) => { if (s.exists()) handle(s.data()); });
+});
+</script>
+</body>
+</html>
