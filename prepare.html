@@ -137,7 +137,7 @@
     <p class="hint only-own">출석부에 있는 성도 이름은 '성도1'처럼 가려서 Gemini에 보내고, 결과가 오면 다시 원래 이름으로 돌려놓습니다.</p>
     <p class="hint only-elder" style="display:none">원고가 없으니 <b>제목과 본문 말씀</b>만으로 설교 전 찬송·봉헌(설교 후) 찬송·성시교독을 추천받습니다. 설교 요약은 만들지 않고, 주보 2쪽은 <b>성도들이 적는 말씀 메모 칸</b>으로 나갑니다.</p>
     <div class="row"><button class="btn primary" id="ai">AI 추천 받기</button><span id="ai-msg" class="hint"></span></div>
-    <p class="hint">AI는 <b>비어 있는 찬송·교독 칸만</b> 채웁니다. 목사님이 먼저 적어 둔 번호는 그대로 둡니다.</p>
+    <p class="hint">AI 추천은 찬송·교독 칸에 <b>바로 들어갑니다</b>. 단, 목사님이 <b>손으로 적은 번호(✋ 표시)</b>는 바꾸지 않습니다.</p>
     <div class="notice" id="mask-note" hidden></div>
     <details id="manual-ai">
       <summary>AI 버튼이 안 될 때: 복사해서 채팅창으로</summary>
@@ -287,6 +287,13 @@ requireLogin($("gate"), async () => {
     });
   }
   document.querySelectorAll(".hymn input").forEach((i) => i.addEventListener("input", refreshTitles));
+  // 목사님이 손으로 적은 찬송·교독 칸 (AI가 덮어쓰지 않음)
+  const pinned = new Set();
+  ["h-before", "h-offer", "resp"].forEach((id) => $(id).addEventListener("input", () => {
+    if ($(id).value.trim()) pinned.add(id); else pinned.delete(id);
+    const w = id === "h-before" ? "why-before" : id === "h-offer" ? "why-offer" : "why-resp";
+    $(w).textContent = $(id).value.trim() ? "✋ 목사님이 적은 번호 (AI가 바꾸지 않음)" : "";
+  }));
 
   /* ----- 주보: 색 · 고정 내용 ----- */
   $("b-theme").innerHTML = `<option value="">자동 (일반 주일 파랑 · 찬양예배 보라)</option>` +
@@ -394,6 +401,10 @@ requireLogin($("gate"), async () => {
       v("sermon-title", w.sermonTitle); v("passage", w.passage); v("sum-full", w.summaryFull); v("sum-short", w.summaryShort);
       v("med1", (w.meditation || [])[0]); v("med2", (w.meditation || [])[1]);
       v("h-before", w.hymnBefore?.no); v("h-offer", w.offertory?.no); v("resp", w.responsive?.no);
+      pinned.clear(); (w.pinned || []).forEach((id) => pinned.add(id));
+      if (!w.pinned && w.isElder && w.offertory) pinned.add("h-offer");   // 예전에 저장한 원로목사님 봉헌송은 목사님이 적은 것으로 봄
+      ["why-before", "why-offer", "why-resp"].forEach((x) => { $(x).textContent = ""; });
+      [["h-before", "why-before"], ["h-offer", "why-offer"], ["resp", "why-resp"]].forEach(([id, x]) => { if (pinned.has(id) && $(id).value) $(x).textContent = "✋ 목사님이 적은 번호 (AI가 바꾸지 않음)"; });
       v("pre1", (w.prelude || [])[0]); v("pre2", (w.prelude || [])[1]); v("first", w.first?.no);
       $("first-v1").checked = w.first ? !!w.first.firstVerseOnly : true;
       v("prayer", w.prayer); v("notices", w.notices);
@@ -408,6 +419,7 @@ requireLogin($("gate"), async () => {
       toast("저장해 둔 이 주의 자료를 불러왔습니다.");
     } else {
       ["sermon-title", "passage", "sum-full", "sum-short", "med1", "med2", "h-before", "h-offer", "resp", "pre1", "pre2", "first", "prayer"].forEach((id) => v(id, ""));
+      pinned.clear(); ["why-before", "why-offer", "why-resp"].forEach((x) => { $(x).textContent = ""; });
       $("notices").value = prevs[0]?.notices || "";
       gospelPicked = []; gospelAfter = null; renderGospel();
       sermonSlides = []; renderSermonSlides();
@@ -533,13 +545,13 @@ requireLogin($("gate"), async () => {
       const fixed = fixNumberByTitle(o.no, o.title, kind);
       const title = kind === "resp" ? responsiveTitle(fixed.no) : hymnTitle(fixed.no);
       // 목사님이 이미 적은 번호는 절대 덮어쓰지 않음 → AI 추천은 참고로만 보여 줌
-      if ($(id).value.trim()) {
-        if (+$(id).value === +fixed.no) { $(why).textContent = (o.reason ? "추천 이유: " + o.reason : ""); return; }  // 적어 둔 번호와 AI 추천이 같음
-        $(why).innerHTML = `✋ 적어 둔 번호 유지 · AI 추천: <b>${fixed.no}${kind === "resp" ? "번" : "장"} ${esc(title)}</b>
-          <button type="button" class="btn" style="padding:2px 10px;font-size:13px" data-set="${id}" data-val="${fixed.no}" data-why="${esc(o.reason || "")}">이걸로 바꾸기</button>`;
+      // 목사님이 손으로 적은 번호(✋ 표시)만 지킴. 예전 값·AI가 넣은 값은 새 추천으로 바꿈
+      if (pinned.has(id) && $(id).value.trim()) {
+        if (+$(id).value === +fixed.no) { $(why).textContent = (o.reason ? "추천 이유: " + o.reason : ""); return; }
+        $(why).textContent = `✋ 목사님이 적은 번호를 그대로 둡니다 · (참고) AI 추천: ${fixed.no}${kind === "resp" ? "번" : "장"} ${title}`;
         return;
       }
-      $(id).value = fixed.no;
+      $(id).value = fixed.no; pinned.delete(id);
       $(why).textContent = (o.reason ? "추천 이유: " + o.reason : "") + (fixed.note ? " · " + fixed.note : "");
     };
     setH("h-before", "why-before", r.hymnBefore, "hymn"); setH("h-offer", "why-offer", r.hymnOffertory, "hymn"); setH("resp", "why-resp", r.responsive, "resp");
@@ -547,13 +559,6 @@ requireLogin($("gate"), async () => {
     const bad = [...document.querySelectorAll(".hymn .t.bad")].length;
     toast(bad ? "추천을 채웠습니다. 빨간 표시 번호를 확인해 주세요." : "추천을 채웠습니다. 읽어 보시고 필요하면 고치세요.", !!bad);
   }
-  // [이걸로 바꾸기]: AI 추천 번호로 바꿈
-  document.addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-set]"); if (!b) return;
-    $(b.dataset.set).value = b.dataset.val;
-    b.parentElement.textContent = b.dataset.why ? "추천 이유: " + b.dataset.why : "";
-    refreshTitles();
-  });
   $("ai").onclick = () => busy($("ai"), async () => {
     $("ai-msg").textContent = "";
     try {
@@ -625,6 +630,7 @@ requireLogin($("gate"), async () => {
       gospelAfter: $("is-praise").checked ? gospelAfter : null,
       sermonSlides, manuscript: manuscriptInfo, updatedAt: Date.now(),
       bulletinTheme: themeValue(), issueNo: num("b-issue"), heidelberg: num("b-heid"),
+      pinned: [...pinned],
     };
   }
   function problems(w) {
