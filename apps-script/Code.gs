@@ -34,7 +34,7 @@ function doPost(e) {
       findManuscripts: findManuscripts_, getManuscript: getManuscript_,
       uploadBulletin: uploadBulletin_, publishBulletin: publishBulletin_, publishSermon: publishSermon_,
       listGospel: listGospel_, getGospelFile: getGospelFile_, getMediaFile: getGospelFile_,
-      listSermonArt: listSermonArt_,
+      listSermonArt: listSermonArt_, saveBulletinData: saveBulletinData_, getBulletinData: getBulletinData_,
       aiGenerate: aiGenerate_, updateWeekly: updateWeekly_, ping: () => ({ ok: true, now: new Date().toISOString() })
     };
     const h = handlers[req.action];
@@ -118,7 +118,9 @@ function updateWeekly_({ weekly }) {
     hymns: weekly.hymns.map(Number).filter(n => n >= 1 && n <= 645),
     responsive: (weekly.responsive || []).map(Number).filter(n => n >= 1 && n <= 137),
     gospel: (weekly.gospel || []).filter(g => g && /^[-_A-Za-z0-9]{10,}$/.test(g.id)).map(g => ({ id: g.id, title: String(g.title || '').slice(0, 80) })),
-    art: (weekly.art || []).filter(g => g && /^[-_A-Za-z0-9]{10,}$/.test(g.id)).map(g => ({ id: g.id, title: String(g.title || '').slice(0, 80) }))
+    art: (weekly.art || []).filter(g => g && /^[-_A-Za-z0-9]{10,}$/.test(g.id)).map(g => ({ id: g.id, title: String(g.title || '').slice(0, 80) })),
+    bulletin: /^\d{4}-\d{2}-\d{2}$/.test(weekly.bulletin || '') ? weekly.bulletin : undefined,
+    bulletinRev: Number(weekly.bulletinRev) || undefined
   };
   const api = 'https://api.github.com/repos/boonger9/woori-studio/contents/weekly.json';
   const headers = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' };
@@ -300,6 +302,22 @@ function publishBulletin_({ date, isPraise }) {
   const file = upsert_(DriveApp.getFolderById(CONFIG.BULLETIN_FOLDER_ID), name, src.next().getBlob().setName(name));
   shareLink_(file);
   return { ok: true, stage: 'published', name, id: file.getId(), url: file.getUrl() };
+}
+
+/* 주보 내용(JSON)을 검토 폴더에 보관 → GitHub Actions가 받아 PDF로 만든 뒤 uploadBulletin으로 올림 */
+function bulletinDataName_(date) { return '주보데이터_' + toYymmdd_(date) + '.json'; }
+function saveBulletinData_({ date, data }) {
+  if (!data || typeof data !== 'object') throw new Error('주보 데이터가 없습니다');
+  const review = subFolder_(DriveApp.getFolderById(CONFIG.BULLETIN_PARENT_ID), CONFIG.REVIEW_FOLDER_NAME);
+  const name = bulletinDataName_(date);
+  upsert_(review, name, Utilities.newBlob(JSON.stringify(data), 'application/json', name));
+  return { ok: true, name: name };
+}
+function getBulletinData_({ date }) {
+  const review = subFolder_(DriveApp.getFolderById(CONFIG.BULLETIN_PARENT_ID), CONFIG.REVIEW_FOLDER_NAME);
+  const it = review.getFilesByName(bulletinDataName_(date));
+  if (!it.hasNext()) throw new Error('주보 데이터가 없습니다: ' + date);
+  return { ok: true, data: JSON.parse(it.next().getBlob().getDataAsString('UTF-8')) };
 }
 
 /* ---------- 말씀 페이지 데이터 ---------- */

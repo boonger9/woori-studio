@@ -69,6 +69,11 @@ jobs:
           python3 tools/build_media.py weekly.json _hymnlib _site
           cat _site/media/manifest.json
 
+      - name: 주보 PDF 만들기 → 드라이브 '주보pdf_검토' 폴더
+        run: |
+          pip install playwright
+          python3 tools/make_bulletin.py weekly.json _site
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

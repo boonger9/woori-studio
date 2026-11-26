@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>주보 미리보기 · 대구우리교회</title>
+<!--
+  주보 틀 (A4 가로 2쪽). 화면 미리보기와 GitHub Actions의 PDF 만들기가 같은 파일을 씁니다.
+  데이터: window.renderBulletin(data) 로 그리거나, 주간 준비 화면이 localStorage에 넣어 둔 미리보기 데이터를 씀.
+  글꼴: 메이플스토리(넥슨, 무료·임베딩 허용) — assets/bulletin/
+-->
+<style>
+@font-face { font-family: "Maple"; src: url("assets/bulletin/MaplestoryOTFLight.woff") format("woff"); font-weight: 300 400; }
+@font-face { font-family: "Maple"; src: url("assets/bulletin/MaplestoryOTFBold.woff") format("woff"); font-weight: 600 800; }
+@page { size: 297mm 210mm; margin: 0; }
+:root { --c: #217fac; --c-light: #e4f1f8; --c-soft: #79b2cd; --ink: #24303a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: "Maple", "Pretendard", sans-serif; font-weight: 300; color: var(--ink); background: #8a8f96; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+@media print { body { background: #fff; } .page { margin: 0 !important; box-shadow: none !important; } .tools { display: none !important; } }
+.page { width: 297mm; height: 210mm; background: #fff; margin: 10mm auto; box-shadow: 0 4px 24px rgba(0,0,0,.25); position: relative; overflow: hidden; page-break-after: always; break-after: page; }
+.page:last-child { page-break-after: auto; break-after: auto; }
+b, strong, .b { font-weight: 700; }
+
+/* 1쪽: 왼쪽·오른쪽 반 */
+.p1 { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; padding: 5mm 6mm 5mm 6mm; }
+.col { display: grid; gap: 3mm; min-height: 0; }
+.left { grid-template-rows: auto 1fr auto; }
+.right { grid-template-rows: auto 1fr auto; }
+
+/* 둥근 제목 탭 + 연한 카드 (기존 주보 느낌) */
+.box { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.tab { justify-self: start; background: var(--c); color: #fff; font-weight: 700; font-size: 11.5pt; padding: 1.4mm 7mm 1.2mm 4mm; border-radius: 3mm 3mm 0 0; min-width: 42%; letter-spacing: .02em; }
+.tab small { font-size: 9pt; font-weight: 300; opacity: .95; }
+.card { background: var(--c-light); border-radius: 0 3mm 3mm 3mm; padding: 2.6mm 3.4mm; min-height: 0; overflow: hidden; font-size: 9.5pt; line-height: 1.55; }
+.card.round { border-radius: 7mm; }
+
+.intro { font-size: 9.2pt; line-height: 1.6; }
+.notices { padding: 4mm 6mm; white-space: normal; }
+.notices .h { font-weight: 700; font-size: 1.08em; margin-top: .55em; }
+.notices .h:first-child { margin-top: 0; }
+.notices p { margin: 0; }
+.bottom2 { display: grid; grid-template-columns: 1fr 1.05fr; gap: 3mm; height: 56mm; }
+.meet { font-size: 8.6pt; line-height: 1.5; padding-top: 3mm; }
+.meet table { border-collapse: collapse; width: 100%; }
+.meet td { padding: 0 1mm 0 0; vertical-align: top; }
+.meet td:first-child { font-weight: 700; white-space: nowrap; width: 1%; padding-right: 3mm; }
+.map { background: #fff; padding: 1mm; display: grid; place-items: center; }
+.map img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* 오른쪽: 머리 */
+.head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4mm; border-top: 1.2mm solid var(--c); padding-top: 1.5mm; }
+.head .logos { display: grid; justify-items: center; gap: .4mm; }
+.head .logos .hs { height: 4.2mm; }
+.head .logos .lg { height: 9.5mm; }
+.head .no { font-size: 14pt; color: var(--c); font-weight: 700; white-space: nowrap; }
+.head .no span { font-weight: 300; }
+.head .motto { color: var(--c); font-size: 9.5pt; line-height: 1.35; text-align: right; font-weight: 700; }
+
+.mid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 3mm; min-height: 0; }
+.order-wrap, .side { display: grid; gap: 2.2mm; min-height: 0; }
+.order-wrap { grid-template-rows: 1fr auto; }
+.side { grid-template-rows: repeat(5, auto); align-content: space-between; }
+.order { padding: 2mm 3.4mm 2mm; display: grid; grid-template-rows: auto 1fr; }
+.order .top { display: flex; justify-content: space-between; font-size: 8.6pt; padding-bottom: 1mm; }
+.order .top b { font-size: 9pt; }
+.rows { display: grid; align-content: space-evenly; }
+.row { display: grid; grid-template-columns: 3.5mm 21mm 1fr; align-items: center; gap: 2mm; padding: 1.05mm 0; border-bottom: .25mm solid rgba(255,255,255,.9); }
+.row:last-child { border-bottom: 0; }
+.row .st { font-weight: 700; text-align: center; }
+.row .lb { font-weight: 700; font-size: 11pt; white-space: nowrap; display: flex; justify-content: space-between; width: 4.3em; }
+.row .lb.long { width: auto; }
+.row .lb i { font-style: normal; }
+.row .lb.long { font-size: 9.6pt; }
+.row .vl { font-size: 10pt; white-space: nowrap; overflow: hidden; }
+.row .vl small { font-size: .78em; }
+.small { font-size: 7.6pt; line-height: 1.45; }
+.side .card { font-size: 8.6pt; line-height: 1.5; padding: 2mm 3mm; }
+.center { text-align: center; }
+.workers b { font-weight: 700; }
+.side .tab { font-size: 10pt; padding: 1.1mm 4mm 1mm 3mm; min-width: 70%; }
+
+.foot { display: grid; grid-template-columns: 1fr auto; gap: 3mm; align-items: end; border-top: .3mm solid var(--c-soft); padding-top: 1.5mm; }
+.foot .t { font-size: 8.8pt; line-height: 1.55; color: var(--c); }
+.foot .t b { color: var(--c); }
+.foot .t .k { color: var(--ink); }
+.foot img { width: 20mm; height: 20mm; }
+
+/* 2쪽: 말씀 메모 */
+.p2 { padding: 5mm 6mm; display: grid; grid-template-rows: auto 1fr; }
+.p2 .tab { font-size: 13pt; min-width: 0; padding-right: 10mm; border-radius: 3mm 3mm 0 0; }
+.memo { background: var(--c-light); border-radius: 0 3mm 3mm 3mm; padding: 4mm 5mm; column-count: 2; column-gap: 9mm; column-fill: auto; column-rule: .3mm solid #fff; height: 100%; overflow: hidden; font-size: 10pt; line-height: 1.72; }
+.memo p { margin: 0 0 .5em; text-align: justify; word-break: keep-all; }
+.memo .h { font-weight: 700; margin: .6em 0 .2em; break-after: avoid; color: var(--c); }
+.memo .title { font-weight: 700; font-size: 1.25em; margin: 0; color: var(--c); }
+.memo .pass { margin: 0 0 .6em; font-weight: 700; }
+.warn { position: absolute; right: 4mm; bottom: 2mm; color: #c0392b; font-size: 8pt; font-family: sans-serif; }
+@media print { .warn { display: none; } }
+
+.tools { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; justify-content: center; padding: 10px; background: #1f2633; color: #fff; font-family: sans-serif; font-size: 14px; }
+.tools button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 0; background: var(--c); color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="tools" id="tools" hidden>
+  <span id="tools-msg">주보 미리보기 (실제 PDF와 같은 틀)</span>
+  <button onclick="window.print()">이 화면을 PDF로 저장 / 인쇄</button>
+</div>
+<div id="root"></div>
+<script>
+(function () {
+  const esc = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const lines = (t) => String(t || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+
+  // 테마: 진한 색 하나 → 연한 카드색·중간색을 자동으로
+  function mix(hex, w) {
+    const n = parseInt(String(hex).replace("#", ""), 16);
+    const r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
+    const m = (c) => Math.round(c + (255 - c) * w).toString(16).padStart(2, "0");
+    return "#" + m(r) + m(g) + m(b);
+  }
+  function applyTheme(c) {
+    const s = document.documentElement.style;
+    const main = /^#[0-9a-f]{6}$/i.test(c || "") ? c : "#217fac";
+    s.setProperty("--c", main); s.setProperty("--c-light", mix(main, 0.88)); s.setProperty("--c-soft", mix(main, 0.45));
+  }
+
+  // 교회 소식: "1. 제목" 줄은 굵게
+  function noticesHtml(t) {
+    return lines(t).map((l) => /^\d+\s*\.\s*\S/.test(l) ? `<div class="h">${esc(l)}</div>` : `<p>${esc(l)}</p>`).join("");
+  }
+  // 말씀 메모: '■ 소제목', '서론', '결론…' 줄은 제목으로
+  function memoHtml(t) {
+    return String(t || "").split(/\n+/).map((s) => s.trim()).filter(Boolean).map((l) => {
+      const h = l.match(/^■\s*(.+)$/) || (l.length <= 30 && /^(서론|본론|결론|적용|\d+\s*[.)])/.test(l) ? [l, l] : null);
+      return h ? `<div class="h">${esc(h[1])}</div>` : `<p>${esc(l)}</p>`;
+    }).join("");
+  }
+  const kv = (l) => { const k = l.split(/\s*\|\s*/); return k.length > 1 ? k : [l, ""]; };
+  const boldLabel = (l) => { const i = l.indexOf(":"); return i > 0 ? `<b>${esc(l.slice(0, i + 1))}</b>${esc(l.slice(i + 1))}` : esc(l); };
+
+  function render(d) {
+    applyTheme(d.theme);
+    const f = d.fixed || {};
+    const rows = (d.order || []).map((r) => `<div class="row"><span class="st">${r.star ? "*" : ""}</span>
+      <span class="lb ${r.label.length > 4 ? "long" : ""}">${r.label.length <= 4 ? [...r.label].map((c) => `<i>${esc(c)}</i>`).join("") : esc(r.label)}</span><span class="vl fit1">${esc(r.value)}${r.note ? ` <small>(${esc(r.note)})</small>` : ""}</span></div>`).join("");
+    document.getElementById("root").innerHTML = `
+<section class="page p1">
+  <div class="col left">
+    <div class="box"><div class="tab">우리 교회소식</div><div class="card intro">${esc(f.intro)}</div></div>
+    <div class="card round notices fit" data-max="12" data-min="8">${noticesHtml(d.notices)}</div>
+    <div class="bottom2">
+      <div class="box"><div class="tab">우리의 모임 안내</div><div class="card meet"><table>${lines(f.meetings).map((l) => { const [a, b] = kv(l); return `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`; }).join("")}</table></div></div>
+      <div class="box"><div class="tab">우리에게 오시는 길</div><div class="card map"><img src="assets/bulletin/map.png" alt="약도"></div></div>
+    </div>
+  </div>
+  <div class="col right">
+    <div class="head">
+      <div class="logos"><img class="hs" src="assets/bulletin/hapshin.png" alt=""><img class="lg" src="assets/bulletin/logo.png" alt="대구우리교회"></div>
+      <div class="no">제 ${esc(d.issueNo)}호 <span>_</span> ${esc(d.dateText)}</div>
+      <div class="motto">바른신학<br>바른교회<br>바른생활</div>
+    </div>
+    <div class="mid">
+      <div class="order-wrap">
+        <div class="box"><div class="tab">${esc(d.serviceName || "주일 낮 예배")}</div>
+          <div class="card order"><div class="top"><span>*표는 일어서서</span><b>설교 : ${esc(d.preacher || "이상후 목사")}</b></div><div class="rows">${rows}</div></div></div>
+        <div class="small">${f.offering ? "※ 헌금위원 - " + esc(f.offering) : ""}</div>
+      </div>
+      <div class="side">
+        <div class="box"><div class="tab">주일 오후 예배</div><div class="card center">${lines(d.afternoon).map(esc).join("<br>")}</div></div>
+        <div class="box"><div class="tab">주중 예배 안내 <small>(생명의삶 Q.T)</small></div><div class="card center">${lines(f.weekday).map(esc).join("<br>")}</div></div>
+        <div class="box"><div class="tab">우리의 일꾼</div><div class="card workers fit" data-max="8.6" data-min="6.5">${lines(f.workers).map(boldLabel).join("<br>")}</div></div>
+        <div class="box"><div class="tab">교회 비전 — ${esc(f.visionTitle || "제자 양육")}</div><div class="card">${lines(f.vision).map(esc).join("<br>")}</div></div>
+        <div class="small">${f.prayerOrder ? "※ 기도순서 – " + esc(f.prayerOrder) : ""}</div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="t">${lines(f.footer).map((l) => { const i = l.indexOf(":"); return i > 0 ? `<b>${esc(l.slice(0, i + 1))}</b> <span class="k">${esc(l.slice(i + 1).trim())}</span>` : esc(l); }).join("<br>")}</div>
+      <img src="assets/bulletin/qr.png" alt="QR">
+    </div>
+  </div>
+</section>
+<section class="page p2">
+  <div class="tab">주일 말씀 메모</div>
+  <div class="memo fitcol" data-max="11" data-min="8.5">
+    <p class="title">${esc(d.sermonTitle)}</p><p class="pass">${esc(d.passage)}</p>
+    ${memoHtml(d.summary)}
+  </div>
+</section>`;
+    return fitAll();
+  }
+
+  // 넘치면 글자를 조금씩 줄임 (너무 작아지면 경고)
+  async function fitAll() {
+    try { await document.fonts.ready; } catch (e) {}
+    await Promise.all([...document.images].map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; })));
+    const warns = [];
+    document.querySelectorAll(".fit").forEach((el) => {
+      let s = +el.dataset.max; el.style.fontSize = s + "pt";
+      while (el.scrollHeight > el.clientHeight + 1 && s > +el.dataset.min) { s -= 0.2; el.style.fontSize = s + "pt"; }
+      if (el.scrollHeight > el.clientHeight + 1) warns.push("교회 소식이 너무 길어 잘립니다");
+    });
+    document.querySelectorAll(".fitcol").forEach((el) => {
+      let s = +el.dataset.max; el.style.fontSize = s + "pt";
+      while (el.scrollWidth > el.clientWidth + 1 && s > +el.dataset.min) { s -= 0.2; el.style.fontSize = s + "pt"; }
+      if (el.scrollWidth > el.clientWidth + 1) warns.push("말씀 메모가 너무 길어 잘립니다");
+    });
+    document.querySelectorAll(".fit1").forEach((el) => {
+      let s = 10; el.style.fontSize = s + "pt";
+      while (el.scrollWidth > el.clientWidth + 1 && s > 7) { s -= 0.25; el.style.fontSize = s + "pt"; }
+    });
+    document.querySelectorAll(".warn").forEach((w) => w.remove());
+    warns.forEach((w, i) => { const e = document.createElement("div"); e.className = "warn"; e.style.bottom = (2 + i * 4) + "mm"; e.textContent = "⚠ " + w; document.querySelector(".p1").appendChild(e); });
+    window.__bulletinWarnings = warns;
+    window.__bulletinReady = true;
+    return warns;
+  }
+
+  window.renderBulletin = render;
+  // 주간 준비 화면에서 [주보 미리보기]로 열었을 때
+  try {
+    const raw = localStorage.getItem("woori-studio:bulletin-preview");
+    if (raw && !/[?&]blank\b/.test(location.search)) {
+      document.getElementById("tools").hidden = false;
+      render(JSON.parse(raw)).then((w) => { if (w.length) document.getElementById("tools-msg").textContent = "⚠ " + w.join(" · "); });
+    }
+  } catch (e) { console.error(e); }
+})();
+</script>
+</body>
+</html>

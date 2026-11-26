@@ -156,6 +156,32 @@
       <div class="gospel-list" id="gospel-list"></div>
       <label class="f">설교 후 찬양 (한 곡) <select id="gospel-after"><option value="">— 목록을 불러온 뒤 고르세요 —</option></select></label>
     </div>
+    <div style="display:grid;gap:10px;border-top:1px solid var(--line);padding-top:12px">
+      <b>주보</b>
+      <div class="grid2">
+        <label class="f">주보 색 <select id="b-theme"></select></label>
+        <label class="f" id="b-custom-wrap" hidden>직접 고른 색 <input type="color" id="b-custom" value="#217fac" style="height:44px;padding:4px"></label>
+        <label class="f">주보 호수 (제 ○호) <input type="number" id="b-issue"></label>
+        <label class="f">오후 예배 하이델베르크 요리문답 (제 ○주일) <input type="number" id="b-heid" min="1" max="52"></label>
+      </div>
+      <div class="row"><button class="btn" id="b-preview">주보 미리보기 (새 창)</button><span class="hint">확정하면 이 모양 그대로 PDF가 만들어져 드라이브 '주보pdf_검토' 폴더에 올라갑니다.</span></div>
+      <details id="b-fixed-box">
+        <summary>주보 고정 내용 고치기 (모임 안내 · 일꾼 · 헌금위원 · 기도순서 등, 가끔 바뀌는 것)</summary>
+        <div style="display:grid;gap:8px;margin-top:10px">
+          <p class="hint">여기서 고치고 [고정 내용 저장]을 누르면 다음 주보부터 계속 적용됩니다. 모임 안내는 "이름 | 시간" 한 줄에 하나.</p>
+          <label class="f">교회 소개 <textarea id="bf-intro"></textarea></label>
+          <label class="f">우리의 모임 안내 <textarea id="bf-meetings" style="min-height:180px"></textarea></label>
+          <label class="f">주중 예배 안내 <textarea id="bf-weekday"></textarea></label>
+          <label class="f">우리의 일꾼 <textarea id="bf-workers" style="min-height:140px"></textarea></label>
+          <div class="grid2"><label class="f">교회 비전 제목 <input type="text" id="bf-visionTitle"></label></div>
+          <label class="f">교회 비전 <textarea id="bf-vision"></textarea></label>
+          <label class="f">헌금위원 <input type="text" id="bf-offering"></label>
+          <label class="f">기도순서 <input type="text" id="bf-prayerOrder"></label>
+          <label class="f">아래쪽 교회 정보 <textarea id="bf-footer" style="min-height:130px"></textarea></label>
+          <div class="row"><button class="btn" id="bf-save">고정 내용 저장</button><button class="btn" id="bf-reset">처음 값으로</button><span class="hint" id="bf-msg"></span></div>
+        </div>
+      </details>
+    </div>
   </div>
 
   <!-- 5. 확정 -->
@@ -165,6 +191,14 @@
     <div class="progress" id="media-progress"><div></div></div>
     <p class="hint" id="media-msg"></p>
     <div class="row"><a class="btn primary" id="go-presenter" href="presenter.html">발표자 화면에서 보기</a></div>
+    <div id="b-done" hidden style="display:grid;gap:8px;border-top:1px solid var(--line);padding-top:12px">
+      <b>주보 PDF</b>
+      <p class="hint" id="b-msg">주보 PDF를 만드는 중입니다… (악보와 함께 4~6분)</p>
+      <div class="row">
+        <a class="btn" id="b-open" target="_blank" rel="noopener" hidden>① 검토본 PDF 열어 보기</a>
+        <button class="btn primary" id="b-publish" hidden>② 홈페이지에 올리기</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -179,6 +213,7 @@ import { loadBackendConfig, saveBackendConfig, callGas, loadMemberNames } from "
 import { loadCatalog, hymnTitle, responsiveTitle, fixNumberByTitle, maskNames, unmask, parseAiJson, buildUserMessage,
          parseManuscriptTitle, isFirstSunday, isFourthSunday, koreanDate, buildWorshipItems, mediaNeeds } from "./js/worship.js";
 import { findSermonSlides, fillVerseText } from "./js/sermon.js";
+import { THEMES, FIXED_DEFAULT, defaultTheme, defaultIssueNo, defaultHeidelberg, buildBulletinData } from "./js/bulletin-data.js";
 import { saveDeck, nextSunday } from "./js/deck.js";
 import { loadManifest } from "./js/media.js";
 
@@ -229,6 +264,36 @@ requireLogin($("gate"), async () => {
   }
   document.querySelectorAll(".hymn input").forEach((i) => i.addEventListener("input", refreshTitles));
 
+  /* ----- 주보: 색 · 고정 내용 ----- */
+  $("b-theme").innerHTML = `<option value="">자동 (일반 주일 파랑 · 찬양예배 보라)</option>` +
+    THEMES.map((t) => `<option value="${t.color}">${t.name}</option>`).join("") + `<option value="custom">직접 고르기…</option>`;
+  $("b-theme").onchange = () => { $("b-custom-wrap").hidden = $("b-theme").value !== "custom"; };
+  const themeValue = () => ($("b-theme").value === "custom" ? $("b-custom").value : $("b-theme").value);
+  function setTheme(c) {
+    if (!c) $("b-theme").value = "";
+    else if (THEMES.some((t) => t.color === c)) $("b-theme").value = c;
+    else { $("b-theme").value = "custom"; $("b-custom").value = c; }
+    $("b-custom-wrap").hidden = $("b-theme").value !== "custom";
+  }
+  const FIX_KEYS = Object.keys(FIXED_DEFAULT);
+  const fillFixed = (f) => FIX_KEYS.forEach((k) => { $("bf-" + k).value = f[k] || ""; });
+  const readFixed = () => Object.fromEntries(FIX_KEYS.map((k) => [k, $("bf-" + k).value.trim()]));
+  try {
+    const snap = await getDoc(doc(db, "config", "bulletin"));
+    fillFixed(snap.exists() ? { ...FIXED_DEFAULT, ...snap.data() } : FIXED_DEFAULT);
+  } catch (e) { fillFixed(FIXED_DEFAULT); }
+  $("bf-save").onclick = () => busy($("bf-save"), async () => {
+    try { await setDoc(doc(db, "config", "bulletin"), { ...readFixed(), updatedAt: Date.now() }); $("bf-msg").textContent = "저장했습니다. 다음 주보부터 이 내용이 들어갑니다."; }
+    catch (e) { $("bf-msg").textContent = "저장 실패: " + e.message; }
+  });
+  $("bf-reset").onclick = () => { fillFixed(FIXED_DEFAULT); $("bf-msg").textContent = "처음 값으로 바꿨습니다. [고정 내용 저장]을 눌러야 적용됩니다."; };
+  $("b-preview").onclick = () => {
+    try { localStorage.setItem("woori-studio:bulletin-preview", JSON.stringify(buildBulletinData(collect(), readFixed()))); }
+    catch (e) { return toast("미리보기를 만들지 못했습니다: " + e.message, true); }
+    const win = window.open("bulletin.html", "woori-bulletin");
+    if (!win) toast("팝업이 차단되었습니다. 주소창 오른쪽에서 팝업을 허용해 주세요.", true);
+  };
+
   /* ----- 1. 날짜 ----- */
   $("date").value = nextSunday();
   async function onDate() {
@@ -266,12 +331,14 @@ requireLogin($("gate"), async () => {
       gospelPicked = w.gospel || []; gospelAfter = w.gospelAfter || null; renderGospel();
       if (w.manuscript) { manuscriptInfo = w.manuscript; }
       sermonSlides = w.sermonSlides || []; renderSermonSlides();
+      v("b-issue", w.issueNo || defaultIssueNo(d)); v("b-heid", w.heidelberg || defaultHeidelberg(d)); setTheme(w.bulletinTheme || "");
       toast("저장해 둔 이 주의 자료를 불러왔습니다.");
     } else {
       ["sermon-title", "passage", "sum-full", "sum-short", "med1", "med2", "h-before", "h-offer", "resp", "pre1", "pre2", "first", "prayer"].forEach((id) => v(id, ""));
       $("notices").value = prevs[0]?.notices || "";
       gospelPicked = []; gospelAfter = null; renderGospel();
       sermonSlides = []; renderSermonSlides();
+      v("b-issue", defaultIssueNo(d)); v("b-heid", defaultHeidelberg(d)); setTheme("");
     }
     refreshTitles();
   }
@@ -452,6 +519,7 @@ requireLogin($("gate"), async () => {
       gospel: $("is-praise").checked ? gospelPicked : [],
       gospelAfter: $("is-praise").checked ? gospelAfter : null,
       sermonSlides, manuscript: manuscriptInfo, updatedAt: Date.now(),
+      bulletinTheme: themeValue(), issueNo: num("b-issue"), heidelberg: num("b-heid"),
     };
   }
   function problems(w) {
@@ -487,7 +555,10 @@ requireLogin($("gate"), async () => {
       // 2) 예배 슬라이드 저장
       const items = buildWorshipItems(w);
       await saveDeck(w.date, { date: w.date, title: (w.isPraise ? "온 세대 찬양예배 " : "주일 낮 예배 ") + w.date, items });
-      // 3) 이번 주 악보 목록 갱신 → GitHub가 그림을 만들어 배포 (지난 날짜 곡은 자동으로 빠짐)
+      // 3) 주보 내용 → 드라이브(검토 폴더)에 보관. GitHub가 받아서 PDF로 만듦
+      const bulletinRev = Date.now();
+      await callGas("saveBulletinData", { date: w.date, data: buildBulletinData(w, readFixed()) });
+      // 4) 이번 주 악보 목록 갱신 → GitHub가 그림을 만들어 배포 (지난 날짜 곡은 자동으로 빠짐)
       const need = mediaNeeds(items);
       let weekly;
       try { weekly = await fetch("weekly.json", { cache: "no-cache" }).then((r) => r.json()); } catch (e) { weekly = {}; }
@@ -499,19 +570,29 @@ requireLogin($("gate"), async () => {
         responsive: [...new Set([...(keep ? weekly.responsive || [] : []), ...need.responsive])],
         gospel: [...(keep ? (weekly.gospel || []) : []), ...need.gospel].filter((g, i, a) => a.findIndex((x) => x.id === g.id) === i),
         art: [...(keep ? (weekly.art || []) : []), ...need.art].filter((g, i, a) => a.findIndex((x) => x.id === g.id) === i),
+        bulletin: w.date, bulletinRev,
       };
       await callGas("updateWeekly", { weekly: merged });
       $("done-box").hidden = false;
       $("done-note").className = "notice ok";
-      $("done-note").textContent = `확정했습니다. 슬라이드 ${items.length}개 항목을 저장했고, 악보 그림을 만들고 있습니다 (보통 4~6분).`;
+      $("done-note").textContent = `확정했습니다. 슬라이드 ${items.length}개 항목을 저장했고, 악보 그림과 주보 PDF를 만들고 있습니다 (보통 4~6분).`;
       $("done-box").scrollIntoView({ behavior: "smooth" });
-      watchMedia(w.date, need);
+      $("b-done").hidden = false; $("b-open").hidden = true; $("b-publish").hidden = true;
+      $("b-msg").textContent = "주보 PDF를 만드는 중입니다… (악보와 함께 4~6분)";
+      $("b-publish").onclick = () => busy($("b-publish"), async () => {
+        try {
+          const r = await callGas("publishBulletin", { date: w.date, isPraise: w.isPraise });
+          $("b-msg").innerHTML = `홈페이지 주보 폴더에 올렸습니다: <a href="${r.url}" target="_blank" rel="noopener">${r.name}</a> (홈페이지에는 몇 분 안에 보입니다)`;
+          $("b-publish").hidden = true;
+        } catch (e) { toast("올리기 실패: " + e.message, true); }
+      });
+      watchMedia(w.date, need, bulletinRev);
     } catch (e) {
       $("done-box").hidden = false; $("done-note").className = "notice err"; $("done-note").textContent = "확정 중 문제가 생겼습니다: " + e.message;
     }
   });
 
-  async function watchMedia(date, need) {
+  async function watchMedia(date, need, bulletinRev) {
     const total = need.hymns.length + need.responsive.length + need.gospel.length + need.art.length;
     const started = Date.now();
     const tick = async () => {
@@ -520,9 +601,19 @@ requireLogin($("gate"), async () => {
         + need.gospel.filter((g) => (m.gospel || {})[g.id]).length + need.art.filter((g) => (m.gospel || {})[g.id]).length;
       const dated = (m.dates || []).includes(date);
       $("media-progress").firstElementChild.style.width = Math.round((dated ? ready : 0) / Math.max(1, total) * 100) + "%";
-      if (dated && ready === total) { $("media-msg").textContent = "악보 준비 완료! 발표자 화면을 새로 고치면 바로 보입니다."; return; }
+      const b = m.bulletin && m.bulletin.date === date && m.bulletin.rev === bulletinRev ? m.bulletin : null;
+      if (b && b.ok) {
+        $("b-open").href = b.url; $("b-open").hidden = false;
+        if ($("b-msg").textContent.includes("만드는 중")) {
+          $("b-msg").textContent = `주보 PDF가 '주보pdf_검토' 폴더에 올라갔습니다 (${b.name}). ① 열어서 확인하고, 괜찮으면 ② 홈페이지에 올리세요.` + (b.warnings && b.warnings.length ? " ⚠ " + b.warnings.join(", ") : "");
+          $("b-publish").hidden = false;
+        }
+      } else if (b && !b.ok) $("b-msg").textContent = "주보 PDF를 만들지 못했습니다: " + b.error;
+      const mediaDone = dated && ready === total;
+      if (mediaDone) $("media-msg").textContent = "악보 준비 완료! 발표자 화면을 새로 고치면 바로 보입니다.";
+      if (mediaDone && b) return;
       if (Date.now() - started > 12 * 60e3) { $("media-msg").textContent = "12분이 지나도 끝나지 않았습니다. GitHub Actions 화면에서 '예배 스튜디오 배포' 결과를 확인해 주세요."; return; }
-      $("media-msg").textContent = `악보 그림 만드는 중… (${Math.round((Date.now() - started) / 1000)}초 지남)`;
+      if (!mediaDone) $("media-msg").textContent = `악보 그림 만드는 중… (${Math.round((Date.now() - started) / 1000)}초 지남)`;
       setTimeout(tick, 20000);
     };
     setTimeout(tick, 15000);
