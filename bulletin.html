@@ -50,12 +50,12 @@ b, strong, .b { font-weight: 700; }
 
 /* 오른쪽: 머리 */
 .head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4mm; border-top: 1.2mm solid var(--c); padding-top: 1.5mm; }
-.head .logos { display: grid; justify-items: center; gap: .4mm; }
-.head .logos .hs { height: 4.2mm; }
-.head .logos .lg { height: 9.5mm; }
+.head .logos { position: relative; padding-top: 5mm; padding-left: 0; }
+.head .logos .hs { position: absolute; left: 4.6mm; top: 0; height: 7mm; }
+.head .logos .lg { height: 12.5mm; display: block; }
 .head .no { font-size: 14pt; color: var(--c); font-weight: 700; white-space: nowrap; }
 .head .no span { font-weight: 300; }
-.head .motto { color: var(--c); font-size: 9.5pt; line-height: 1.35; text-align: right; font-weight: 700; }
+.head .motto { color: var(--c); font-size: 10pt; line-height: 1.35; text-align: right; font-weight: 300; }
 
 .mid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 3mm; min-height: 0; }
 .order-wrap, .side { display: grid; gap: 2.2mm; min-height: 0; }
@@ -79,8 +79,10 @@ b, strong, .b { font-weight: 700; }
 .center { text-align: center; }
 .workers b { font-weight: 700; }
 .side .tab { font-size: 10pt; padding: 1.1mm 4mm 1mm 3mm; min-width: 70%; }
+.mid .order-wrap > .box > .tab, .mid .side > .box:first-child > .tab { justify-self: stretch; border-radius: 2.5mm 2.5mm 0 0; }
 
-.foot { display: grid; grid-template-columns: 1fr auto; gap: 3mm; align-items: end; border-top: .3mm solid var(--c-soft); padding-top: 1.5mm; }
+.foot { display: grid; grid-template-columns: 1fr auto; gap: 3mm; align-items: center; border-top: 1.2mm solid var(--c); padding-top: 1.8mm; }
+.foot .yt { height: 1em; vertical-align: -0.15em; margin-right: 1mm; }
 .foot .t { font-size: 8.8pt; line-height: 1.55; color: var(--c); }
 .foot .t b { color: var(--c); }
 .foot .t .k { color: var(--ink); }
@@ -139,8 +141,9 @@ b, strong, .b { font-weight: 700; }
   const kv = (l) => { const k = l.split(/\s*\|\s*/); return k.length > 1 ? k : [l, ""]; };
   const boldLabel = (l) => { const i = l.indexOf(":"); return i > 0 ? `<b>${esc(l.slice(0, i + 1))}</b>${esc(l.slice(i + 1))}` : esc(l); };
 
-  function render(d) {
+  async function render(d) {
     applyTheme(d.theme);
+    const mapSrc = await tintMap(getComputedStyle(document.documentElement).getPropertyValue("--c").trim());
     const f = d.fixed || {};
     const rows = (d.order || []).map((r) => `<div class="row"><span class="st">${r.star ? "*" : ""}</span>
       <span class="lb ${r.label.length > 4 ? "long" : ""}">${r.label.length <= 4 ? [...r.label].map((c) => `<i>${esc(c)}</i>`).join("") : esc(r.label)}</span><span class="vl fit1">${esc(r.value)}${r.note ? ` <small>(${esc(r.note)})</small>` : ""}</span></div>`).join("");
@@ -151,7 +154,7 @@ b, strong, .b { font-weight: 700; }
     <div class="card round notices fit" data-max="12" data-min="8">${noticesHtml(d.notices)}</div>
     <div class="bottom2">
       <div class="box"><div class="tab">우리의 모임 안내</div><div class="card meet"><table>${lines(f.meetings).map((l) => { const [a, b] = kv(l); return `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`; }).join("")}</table></div></div>
-      <div class="box"><div class="tab">우리에게 오시는 길</div><div class="card map"><img src="assets/bulletin/map.png" alt="약도"></div></div>
+      <div class="box"><div class="tab">우리에게 오시는 길</div><div class="card map"><img id="map-img" alt="약도"></div></div>
     </div>
   </div>
   <div class="col right">
@@ -175,7 +178,10 @@ b, strong, .b { font-weight: 700; }
       </div>
     </div>
     <div class="foot">
-      <div class="t">${lines(f.footer).map((l) => { const i = l.indexOf(":"); return i > 0 ? `<b>${esc(l.slice(0, i + 1))}</b> <span class="k">${esc(l.slice(i + 1).trim())}</span>` : esc(l); }).join("<br>")}</div>
+      <div class="t">${lines(f.footer).map((l) => {
+        const yt = /^유튜브/.test(l) ? `<img class="yt" src="assets/bulletin/youtube.png" alt="YouTube">` : "";
+        const i = l.indexOf(":");
+        return yt + (i > 0 ? `<b>${esc(l.slice(0, i + 1))}</b> <span class="k">${esc(l.slice(i + 1).trim())}</span>` : esc(l)); }).join("<br>")}</div>
       <img src="assets/bulletin/qr.png" alt="QR">
     </div>
   </div>
@@ -187,6 +193,7 @@ b, strong, .b { font-weight: 700; }
     ${memoHtml(d.summary)}
   </div>
 </section>`;
+    document.getElementById("map-img").src = mapSrc;
     return fitAll();
   }
 
@@ -214,6 +221,37 @@ b, strong, .b { font-weight: 700; }
     window.__bulletinWarnings = warns;
     window.__bulletinReady = true;
     return warns;
+  }
+
+  // 약도: 파란 길·글자를 주보 색으로 바꿔 칠함 (빨간 화살표·검은 교회·보라 점은 그대로)
+  function hexRgb(h) { const n = parseInt(h.replace("#", ""), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+  function tintMap(color) {
+    return new Promise((resolve) => {
+      const im = new Image();
+      im.onload = () => {
+        const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight;
+        const g = c.getContext("2d"); g.drawImage(im, 0, 0);
+        const d = g.getImageData(0, 0, c.width, c.height), a = d.data;
+        const [tr, tg, tb] = hexRgb(color);
+        const BASE = 0.443;  // 원래 약도의 진한 파랑(#2889ba) 밝기 (0~1)
+        for (let i = 0; i < a.length; i += 4) {
+          const r = a[i], gg = a[i + 1], b = a[i + 2];
+          const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+          if (mx - mn < 40) continue;                        // 회색·흰색·검정은 그대로
+          let h = 0; const dd = mx - mn;
+          if (mx === r) h = ((gg - b) / dd) % 6; else if (mx === gg) h = (b - r) / dd + 2; else h = (r - gg) / dd + 4;
+          h = (h * 60 + 360) % 360;
+          if (h < 170 || h > 235) continue;                   // 파랑 계열만
+          const L = (mx + mn) / 510;
+          const w = Math.max(0, Math.min(1, (L - BASE) / (1 - BASE)));  // 원래보다 밝은 만큼 흰색 섞기
+          a[i] = tr + (255 - tr) * w; a[i + 1] = tg + (255 - tg) * w; a[i + 2] = tb + (255 - tb) * w;
+        }
+        g.putImageData(d, 0, 0);
+        resolve(c.toDataURL("image/png"));
+      };
+      im.onerror = () => resolve("assets/bulletin/map.png");
+      im.src = "assets/bulletin/map.png";
+    });
   }
 
   window.renderBulletin = render;
