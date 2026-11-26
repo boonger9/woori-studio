@@ -1,6 +1,7 @@
 // 주간 준비: 이름 가리기, AI 결과 읽기, 예배 순서(슬라이드) 만들기
 import { APOSTLES_CREED, CLOSING_HYMN, COMMUNION_HYMN } from "./fixed.js";
 import { sermonItems } from "./sermon.js";
+import { defaultHeidelberg } from "./bulletin-data.js";
 
 /* ---------- 찬송가·교독문 제목 ---------- */
 let catalog = null;
@@ -111,7 +112,23 @@ export function koreanDate(date) {
  *      responsive:{no,title}, hymnBefore:{no,title}, offertory:{no,title}, prayer, gospel:[{id,title}] }
  */
 export function buildWorshipItems(w) {
-  return w.isPraise ? buildPraiseItems(w) : buildSundayItems(w);
+  const day = w.isPraise ? buildPraiseItems(w) : buildSundayItems(w);
+  return [...day, ...afternoonItems(w)];
+}
+
+/** 오후 예배 (낮 예배 슬라이드 끝에 이어서): 제목(하이델베르크 요리문답) → 복음송가 두 곡 → 로고 */
+export function afternoonItems(w) {
+  const a = w.afternoon || {};
+  if (a.on === false) return [];
+  const songs = (a.songs || []).filter((x) => x && x.id);
+  if (!a.title && !songs.length) return [];
+  const heid = w.heidelberg || defaultHeidelberg(w.date);
+  return [
+    { section: "오후 예배", type: "title", title: a.title || "오후 예배",
+      subtitle: `오후 예배 · 하이델베르크 요리문답 제${heid}주일` },
+    ...songs.map((g, i) => ({ section: "오후 예배", type: "gospel", id: g.id, title: g.title || `찬양 ${i + 1}` })),
+    { section: "오후 예배 후", type: "logo" },
+  ];
 }
 
 const H = (section, no, extra = {}) => ({ section, type: "hymn", no: Number(no), title: hymnTitle(no), ...extra });

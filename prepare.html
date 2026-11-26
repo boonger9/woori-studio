@@ -181,6 +181,19 @@
       <label class="f">설교 후 찬양 (한 곡) <select id="gospel-after"><option value="">— 목록을 불러온 뒤 고르세요 —</option></select></label>
     </div>
     <div style="display:grid;gap:10px;border-top:1px solid var(--line);padding-top:12px">
+      <b>오후 예배 <span class="hint" style="font-weight:400">— 낮 예배 슬라이드 끝에 이어서 나옵니다 (제목 → 찬양 두 곡)</span></b>
+      <label class="row" style="gap:6px"><input type="checkbox" id="pm-on" checked> 오후 예배 슬라이드 넣기</label>
+      <div class="grid2">
+        <label class="f">오후 예배 제목 <input type="text" id="pm-title" placeholder="예: 우리의 유일한 위로"></label>
+        <p class="hint" style="align-self:end">제목 아래에 "오후 예배 · 하이델베르크 요리문답 제<b id="pm-heid"></b>주일"이 함께 나옵니다 (아래 주보 칸의 숫자).</p>
+      </div>
+      <div class="row"><button class="btn" id="pm-load">찬양/악보ppt 폴더 목록 불러오기</button><span id="pm-msg" class="hint"></span></div>
+      <div class="grid2">
+        <label class="f">찬양 1 <select id="pm-s1"><option value="">— 목록을 불러온 뒤 고르세요 —</option></select></label>
+        <label class="f">찬양 2 <select id="pm-s2"><option value="">— 목록을 불러온 뒤 고르세요 —</option></select></label>
+      </div>
+    </div>
+    <div style="display:grid;gap:10px;border-top:1px solid var(--line);padding-top:12px">
       <b>주보</b>
       <div class="grid2">
         <label class="f">주보 색 <select id="b-theme"></select></label>
@@ -245,7 +258,7 @@ import { saveDeck, nextSunday } from "./js/deck.js";
 import { loadManifest } from "./js/media.js";
 
 const $ = (id) => document.getElementById(id);
-let manuscriptInfo = null, maskMap = [], gospelSongs = [], gospelPicked = [], gospelAfter = null, sermonSlides = [], schoolDoc = null;
+let manuscriptInfo = null, maskMap = [], gospelSongs = [], gospelPicked = [], gospelAfter = null, sermonSlides = [], schoolDoc = null, pmSongs = [null, null];
 
 function toast(msg, isErr) {
   const t = document.createElement("div");
@@ -415,6 +428,7 @@ requireLogin($("gate"), async () => {
       $("kid-ready").checked = !!w.kidReady; applyElder();
       $("elder-notes").value = w.elderNotes || ""; schoolDoc = w.schoolDoc || null; showSchoolDoc();
       gospelPicked = w.gospel || []; gospelAfter = w.gospelAfter || null; renderGospel();
+      const pm = w.afternoon || {}; $("pm-on").checked = pm.on !== false; v("pm-title", pm.title); pmSongs = [(pm.songs || [])[0] || null, (pm.songs || [])[1] || null];
       if (w.manuscript) { manuscriptInfo = w.manuscript; }
       sermonSlides = w.sermonSlides || []; renderSermonSlides();
       v("b-issue", w.issueNo || defaultIssueNo(d)); v("b-heid", w.heidelberg || defaultHeidelberg(d)); setTheme(w.bulletinTheme || "");
@@ -424,12 +438,13 @@ requireLogin($("gate"), async () => {
       pinned.clear(); ["why-before", "why-offer", "why-resp"].forEach((x) => { $(x).textContent = ""; });
       $("notices").value = prevs[0]?.notices || "";
       gospelPicked = []; gospelAfter = null; renderGospel();
+      $("pm-on").checked = true; v("pm-title", ""); pmSongs = [null, null];
       sermonSlides = []; renderSermonSlides();
       $("kid-ready").checked = false; applyElder();
       $("elder-notes").value = ""; schoolDoc = null; showSchoolDoc();
       v("b-issue", defaultIssueNo(d)); v("b-heid", defaultHeidelberg(d)); setTheme("");
     }
-    refreshTitles();
+    refreshTitles(); renderPm();
   }
 
   /* ----- 2. 원고 ----- */
@@ -608,8 +623,28 @@ requireLogin($("gate"), async () => {
     renderGospel();
   };
   $("load-gospel").onclick = () => busy($("load-gospel"), async () => {
-    try { const r = await callGas("listGospel"); gospelSongs = r.songs; $("gospel-msg").textContent = `${r.songs.length}곡`; renderGospel(); }
+    try { const r = await callGas("listGospel"); gospelSongs = r.songs; $("gospel-msg").textContent = `${r.songs.length}곡`; renderGospel(); renderPm(); }
     catch (e) { $("gospel-msg").textContent = e.message; }
+  });
+
+  /* ----- 오후 예배: 제목 + 복음송가 두 곡 ----- */
+  function renderPm() {
+    $("pm-heid").textContent = $("b-heid").value || "?";
+    ["pm-s1", "pm-s2"].forEach((id, k) => {
+      const cur = pmSongs[k];
+      const opts = [...gospelSongs]; if (cur && !opts.find((x) => x.id === cur.id)) opts.push(cur);
+      $(id).innerHTML = `<option value="">${gospelSongs.length ? "— 고르세요 —" : "— 목록을 불러온 뒤 고르세요 —"}</option>` +
+        opts.map((x) => `<option value="${x.id}" ${cur && cur.id === x.id ? "selected" : ""}>${x.title.replace(/</g, "&lt;")}</option>`).join("");
+    });
+  }
+  ["pm-s1", "pm-s2"].forEach((id, k) => { $(id).onchange = (e) => {
+    const v = e.target.value; const s = gospelSongs.find((x) => x.id === v) || (pmSongs[k] && pmSongs[k].id === v ? pmSongs[k] : null);
+    pmSongs[k] = v && s ? { id: v, title: s.title } : null;
+  }; });
+  $("b-heid").addEventListener("input", renderPm);
+  $("pm-load").onclick = () => busy($("pm-load"), async () => {
+    try { const r = await callGas("listGospel"); gospelSongs = r.songs; $("pm-msg").textContent = `${r.songs.length}곡`; renderPm(); renderGospel(); }
+    catch (e) { $("pm-msg").textContent = e.message; }
   });
 
   /* ----- 저장·확정 ----- */
@@ -633,6 +668,7 @@ requireLogin($("gate"), async () => {
       sermonSlides, manuscript: manuscriptInfo, updatedAt: Date.now(),
       bulletinTheme: themeValue(), issueNo: num("b-issue"), heidelberg: num("b-heid"),
       pinned: [...pinned],
+      afternoon: { on: $("pm-on").checked, title: $("pm-title").value.trim(), songs: pmSongs.filter(Boolean) },
     };
   }
   function problems(w) {
