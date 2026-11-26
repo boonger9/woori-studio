@@ -6,6 +6,7 @@
 <title>주간 준비 · 예배 스튜디오</title>
 <link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/studio.css">
+<script src="assets/vendor/jspdf.umd.min.js" defer></script>
 <style>
   .prep { max-width: 860px; margin: 0 auto; padding: 20px 16px 120px; display: grid; gap: 16px; }
   .box { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 12px; }
@@ -194,10 +195,11 @@
       </div>
     </div>
     <div style="display:grid;gap:10px;border-top:1px solid var(--line);padding-top:12px">
-      <b>콘티 <span class="hint" style="font-weight:400">— 반주자·찬양팀용 악보 모음 (찬양/콘티 폴더)</span></b>
-      <p class="hint">찬양예배(넷째 주)와 오후 예배에서 고른 찬양의 악보를 <b>찬양/악보 폴더</b>에서 제목으로 찾아,
-        <b>A4 가로 · 여백 1cm</b> 구글 문서에 <b>두 장씩 나란히</b> 넣습니다. 악보 이미지 이름은 곡 제목으로 (여러 장이면 제목_1, 제목_2).<br>
-        <b>평소에는 [확정하기]를 누르면 자동으로 만들어집니다.</b> [콘티만 다시 만들기]는 확정한 뒤에 악보를 넣거나 바꿨을 때만 누르세요 (10초, 예배 화면·주보는 그대로).</p>
+      <b>콘티 <span class="hint" style="font-weight:400">— 반주자·찬양팀용 악보 모음 PDF (찬양/콘티 폴더)</span></b>
+      <p class="hint">이번 주일에 부르는 <b>모든 찬송가</b>(묵도기원·찬송·설교 전·기도송 631·봉헌·성찬·폐회)와 <b>찬양예배·오후 예배 복음송가</b> 악보를 예배 순서대로 모아
+        <b>A4 가로 · 여백 1cm</b> PDF로 만듭니다. 긴 악보는 쪽 높이를 꽉 채우고, 짧은 악보는 한 칸에 위아래로 둡니다.<br>
+        찬송가 악보는 자동(새찬송가 1~645장). 복음송가 악보만 <b>찬양/악보 폴더</b>에 곡 제목으로 넣어 두세요 (여러 장이면 제목_1, 제목_2).<br>
+        <b>평소에는 [확정하기]를 누르면 자동으로 만들어집니다.</b> [콘티만 다시 만들기]는 확정한 뒤에 악보를 넣거나 바꿨을 때만 누르세요 (예배 화면·주보는 그대로).</p>
       <div id="conti-list" style="display:grid;gap:4px;font-size:14px"></div>
       <div class="row"><button class="btn" id="conti-check">악보 찾아 보기</button><button class="btn" id="conti-make">콘티만 다시 만들기</button><span id="conti-msg" class="hint"></span></div>
     </div>
@@ -261,7 +263,7 @@ import { loadCatalog, hymnTitle, responsiveTitle, fixNumberByTitle, maskNames, u
          parseManuscriptTitle, isFirstSunday, isFourthSunday, isFifthSunday, PASTOR, ELDER, buildPassageMessage,
          koreanDate, buildWorshipItems, mediaNeeds } from "./js/worship.js";
 import { findSermonSlides, fillVerseText, passageSlides, passageBook, bookName } from "./js/sermon.js";
-import { matchScores, contiSets, cleanTitle } from "./js/conti.js";
+import { matchScores, contiSections, buildContiPdf } from "./js/conti.js";
 import { THEMES, FIXED_DEFAULT, defaultTheme, defaultIssueNo, defaultHeidelberg, buildBulletinData } from "./js/bulletin-data.js";
 import { saveDeck, nextSunday } from "./js/deck.js";
 import { loadManifest } from "./js/media.js";
@@ -638,33 +640,47 @@ requireLogin($("gate"), async () => {
     catch (e) { $("gospel-msg").textContent = e.message; }
   });
 
-  /* ----- 콘티: 고른 찬양의 악보 이미지를 모아 구글 문서로 ----- */
+  /* ----- 콘티: 이번 주일 모든 찬송·찬양 악보를 모아 A4 가로 PDF로 ----- */
   async function loadScores(fresh) {
     if (fresh || !scoresCache) scoresCache = (await callGas("listScores")).scores || [];
     return scoresCache;
   }
   function contiPlan(scores) {
-    return contiSets(collect()).map((set) => ({ label: set.label, songs: set.songs.map((x) => {
-      const m = matchScores(x.title, scores);
-      return { title: cleanTitle(x.title) + (x.role ? ` (${x.role})` : ""), scoreIds: m.map((y) => y.id), scoreNames: m.map((y) => y.name) };
-    }) }));
+    return contiSections(collect()).map((sec) => ({ ...sec, items: sec.items.map((it) =>
+      it.kind === "gospel" ? { ...it, scores: matchScores(it.title, scores) } : it) }));
   }
   function renderConti(plan) {
-    $("conti-list").innerHTML = plan.length ? plan.map((set) => `<b>${esc(set.label)}</b>` + set.songs.map((x, i) =>
-      `<div>${i + 1}. ${esc(x.title)} — ${x.scoreIds.length ? `✅ ${esc(x.scoreNames.join(", "))}` : `<span style="color:var(--danger)">⚠ 악보 없음 (찬양/악보 폴더에 '${esc(x.title.replace(/ \(.*$/, ""))}' 이름으로 넣어 주세요)</span>`}</div>`).join("")).join("")
-      : `<p class="hint">찬양예배 곡이나 오후 예배 찬양을 고르면 여기에 나옵니다.</p>`;
+    $("conti-list").innerHTML = plan.length ? plan.map((sec) => `<b>${esc(sec.section)}</b>` + sec.items.map((it) =>
+      `<div>· ${esc(it.label)} — ${it.kind === "hymn" ? `${it.no}장 ${esc(hymnTitle(it.no))} ✅ <span class="hint">찬송가 악보 자동</span>`
+        : it.scores.length ? `${esc(it.title)} ✅ <span class="hint">${esc(it.scores.map((x) => x.name).join(", "))}</span>`
+        : `${esc(it.title)} <span style="color:var(--danger)">⚠ 악보 없음 — 찬양/악보 폴더에 곡 제목으로 넣어 주세요</span>`}</div>`).join("")).join("")
+      : `<p class="hint">찬송을 입력하거나 찬양을 고르면 여기에 나옵니다.</p>`;
   }
   function showContiDoc() {
-    if (contiDoc) $("conti-msg").innerHTML = `✅ <a href="${contiDoc.url}" target="_blank" rel="noopener">${esc(contiDoc.name)}</a> 열기`;
+    if (contiDoc) $("conti-msg").innerHTML = `✅ <a href="${contiDoc.url}" target="_blank" rel="noopener">${esc(contiDoc.name)}</a> 열기` + (contiDoc.missing && contiDoc.missing.length ? ` <span style="color:var(--danger)">· 악보 없음: ${esc(contiDoc.missing.join(", "))}</span>` : "");
   }
   async function makeConti() {
+    if (!window.jspdf) throw new Error("PDF 도구를 아직 불러오지 못했습니다. 잠시 뒤 다시 누르세요.");
     const plan = contiPlan(await loadScores(true));
     renderConti(plan);
-    if (!plan.length) throw new Error("콘티에 넣을 찬양이 없습니다 (찬양예배 곡이나 오후 예배 찬양을 고르세요)");
-    const r = await callGas("makeConti", { date: $("date").value, sets: plan.map((x) => ({ label: x.label, songs: x.songs.map(({ title, scoreIds }) => ({ title, scoreIds })) })) });
-    contiDoc = { url: r.url, name: r.name, at: Date.now() };
+    if (!plan.length) throw new Error("콘티에 넣을 찬송·찬양이 없습니다");
+    const r = await buildContiPdf({
+      date: $("date").value, sections: plan,
+      getGospelScores: async (it) => {
+        const out = [];
+        for (const sc of it.scores || []) {
+          const f = await callGas("getGospelFile", { fileId: sc.id });
+          out.push(`data:${f.mimeType || "image/jpeg"};base64,${f.base64}`);
+        }
+        return out;
+      },
+      onProgress: (n, total, it) => { $("conti-msg").textContent = `악보 모으는 중 ${n}/${total} (${it.kind === "hymn" ? it.no + "장" : it.title})…`; },
+    });
+    $("conti-msg").textContent = `PDF ${r.pages}쪽을 콘티 폴더에 올리는 중…`;
+    const up = await callGas("uploadConti", { date: $("date").value, base64: r.base64 });
+    contiDoc = { url: up.url, name: up.name, missing: r.missing, at: Date.now() };
     showContiDoc();
-    return r;
+    return { ...r, ...up };
   }
   $("conti-check").onclick = () => busy($("conti-check"), async () => {
     try { renderConti(contiPlan(await loadScores(true))); } catch (e) { $("conti-msg").textContent = e.message; }
@@ -672,8 +688,9 @@ requireLogin($("gate"), async () => {
   $("conti-make").onclick = () => busy($("conti-make"), async () => {
     try {
       const r = await makeConti();
-      toast(r.missing && r.missing.length ? `콘티를 만들었습니다. 악보 없는 곡: ${r.missing.join(", ")}` : "콘티를 만들었습니다.", !!(r.missing && r.missing.length));
-    } catch (e) { $("conti-msg").textContent = e.message; toast("콘티를 만들지 못했습니다: " + e.message, true); }
+      await setDoc(doc(db, "weeks", $("date").value), { ...collect(), savedAt: Date.now() });
+      toast(r.missing.length ? `콘티를 만들었습니다 (${r.pages}쪽). 악보 없는 곡: ${r.missing.join(", ")}` : `콘티를 만들었습니다 (${r.pages}쪽).`, !!r.missing.length);
+    } catch (e) { $("conti-msg").textContent = "콘티 실패: " + e.message; toast("콘티를 만들지 못했습니다: " + e.message, true); }
   });
 
   /* ----- 오후 예배: 제목 + 복음송가 두 곡 ----- */
@@ -783,7 +800,7 @@ requireLogin($("gate"), async () => {
       $("done-note").className = "notice ok";
       $("done-note").textContent = `확정했습니다. 슬라이드 ${items.length}개 항목을 저장했고, 찬송·찬양 PPT 화면과 주보 PDF를 만들고 있습니다 (보통 4~6분).`;
       // 콘티: 찬양예배·오후 예배 찬양이 있으면 함께 만듦 (실패해도 확정은 그대로)
-      if (contiSets(w).length) makeConti().then(async (r) => {
+      if (contiSections(w).length) makeConti().then(async (r) => {
         await setDoc(doc(db, "weeks", w.date), { ...collect(), confirmedAt: Date.now() });
         toast(r.missing && r.missing.length ? `콘티도 만들었습니다. 악보 없는 곡: ${r.missing.join(", ")}` : "콘티도 만들었습니다.", !!(r.missing && r.missing.length));
       }).catch((e) => { $("conti-msg").textContent = "콘티 실패: " + e.message; });

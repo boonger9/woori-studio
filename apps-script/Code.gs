@@ -37,7 +37,7 @@ function doPost(e) {
       uploadBulletin: uploadBulletin_, publishBulletin: publishBulletin_, publishSermon: publishSermon_,
       listGospel: listGospel_, getGospelFile: getGospelFile_, getMediaFile: getGospelFile_,
       listSermonArt: listSermonArt_, saveBulletinData: saveBulletinData_, getBulletinData: getBulletinData_,
-      createSchoolDoc: createSchoolDoc_, listScores: listScores_, makeConti: makeConti_,
+      createSchoolDoc: createSchoolDoc_, listScores: listScores_, uploadConti: uploadConti_,
       aiGenerate: aiGenerate_, updateWeekly: updateWeekly_, ping: () => ({ ok: true, now: new Date().toISOString() })
     };
     const h = handlers[req.action];
@@ -179,8 +179,8 @@ function sermonArtFolder_(date) {
 /** 그림으로 바꿀 파일 하나를 base64로 돌려줌 (GitHub Actions가 사용). 찬양/악보ppt·설교그림 폴더 안 파일만 허용 */
 function getGospelFile_({ fileId }) {
   const f = DriveApp.getFileById(fileId);
-  if (!isInside_(f, CONFIG.GOSPEL_FOLDER_ID) && !isInside_(f, CONFIG.SERMON_ART_FOLDER_ID))
-    throw new Error('찬양/악보ppt 또는 설교그림 폴더 밖의 파일은 받을 수 없습니다');
+  if (!isInside_(f, CONFIG.GOSPEL_FOLDER_ID) && !isInside_(f, CONFIG.SERMON_ART_FOLDER_ID) && !isInside_(f, CONFIG.SCORE_FOLDER_ID))
+    throw new Error('찬양/악보ppt · 찬양/악보 · 설교그림 폴더 밖의 파일은 받을 수 없습니다');
   let blob = f.getBlob(), name = f.getName();
   if (f.getMimeType() === MimeType.GOOGLE_SLIDES) { blob = f.getAs(MimeType.PDF); name = name + '.pdf'; }
   const bytes = blob.getBytes();
@@ -351,63 +351,14 @@ function listScores_() {
   return { ok: true, scores: out };
 }
 
-/**
- * 콘티 문서 만들기: 찬양/콘티 폴더에 'YYMMDD 콘티' 구글 문서 (A4 가로, 여백 1cm, 악보 두 장씩 나란히)
- * sets: [{ label: '온 세대 찬양예배', songs: [{ title, scoreIds: [...] }] }, { label: '오후 예배', ... }]
- * 같은 이름 문서가 있으면 내용을 새로 바꿔 씀.
- */
-function makeConti_({ date, sets }) {
-  const yymmdd = toYymmdd_(date);
-  const name = yymmdd + ' 콘티';
-  const folder = DriveApp.getFolderById(CONFIG.CONTI_FOLDER_ID);
-  const found = folder.getFilesByName(name);
-  let doc;
-  if (found.hasNext()) { doc = DocumentApp.openById(found.next().getId()); doc.getBody().clear(); }
-  else { doc = DocumentApp.create(name); DriveApp.getFileById(doc.getId()).moveTo(folder); }
-  const body = doc.getBody();
-  const CM = 28.3465;                       // 1cm = 28.35pt
-  const W = 841.89, H = 595.28;             // A4 가로
-  body.setPageWidth(W).setPageHeight(H).setMarginTop(CM).setMarginBottom(CM).setMarginLeft(CM).setMarginRight(CM);
-  const cellW = (W - 2 * CM) / 2 - 4, cellH = H - 2 * CM - 48;   // 위 제목 한 줄 + 표 뒤 빈 줄 자리를 뺌
-  const missing = [];
-  let first = true;
-  (sets || []).forEach((set) => {
-    const imgs = [];
-    (set.songs || []).forEach((song) => {
-      if (!song.scoreIds || !song.scoreIds.length) missing.push(song.title);
-      (song.scoreIds || []).forEach((id) => imgs.push(id));
-    });
-    if (!imgs.length) return;
-    const order = (set.songs || []).map((x, i) => (i + 1) + '. ' + x.title).join('   ');
-    for (let k = 0; k < imgs.length; k += 2) {
-      let hp;
-      if (first) { hp = body.getParagraphs()[0]; first = false; }
-      else {
-        // 표 뒤에 자동으로 붙는 빈 줄에 쪽 나눔을 넣어 빈 쪽이 생기지 않게
-        const last = body.getChild(body.getNumChildren() - 1);
-        if (last.getType() === DocumentApp.ElementType.PARAGRAPH) last.asParagraph().appendPageBreak(); else body.appendPageBreak();
-        hp = body.appendParagraph('');
-      }
-      hp.setText(date.replace(/-/g, '. ') + '  ' + (set.label || '') + (k === 0 ? '  |  ' + order : '  (이어서)'));
-      hp.setFontSize(9).setBold(false).setSpacingAfter(2).setSpacingBefore(0);
-      const table = body.appendTable([['', '']]);
-      table.setBorderWidth(0);
-      [0, 1].forEach((c) => {
-        const id = imgs[k + c];
-        const cell = table.getCell(0, c);
-        cell.setPaddingTop(0).setPaddingBottom(0).setPaddingLeft(2).setPaddingRight(2).setWidth(cellW + 4);
-        if (!id) return;
-        const p = cell.getChild(0).asParagraph();
-        p.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-        const img = p.appendInlineImage(DriveApp.getFileById(id).getBlob());
-        const r = Math.min(cellW / img.getWidth(), cellH / img.getHeight());
-        img.setWidth(Math.floor(img.getWidth() * r)).setHeight(Math.floor(img.getHeight() * r));
-      });
-    }
-  });
-  if (first) body.getParagraphs()[0].setText('악보 이미지를 찾지 못했습니다. 찬양/악보 폴더에 곡 제목으로 이미지를 넣어 주세요.');
-  doc.saveAndClose();
-  return { ok: true, name: name, url: 'https://docs.google.com/document/d/' + doc.getId() + '/edit', missing: missing };
+/** 콘티 PDF(브라우저에서 만든 것)를 찬양/콘티 폴더에 'YYMMDD 콘티.pdf'로 올림 (같은 이름이면 덮어씀) */
+function uploadConti_({ date, base64 }) {
+  if (!base64) throw new Error('PDF가 없습니다');
+  const name = toYymmdd_(date) + ' 콘티.pdf';
+  const blob = Utilities.newBlob(Utilities.base64Decode(base64), MimeType.PDF, name);
+  if (blob.getBytes().length > 45 * 1024 * 1024) throw new Error('콘티 PDF가 45MB를 넘습니다');
+  const file = upsert_(DriveApp.getFolderById(CONFIG.CONTI_FOLDER_ID), name, blob);
+  return { ok: true, name: name, url: file.getUrl() };
 }
 
 /* 주보 내용(JSON)을 검토 폴더에 보관 → GitHub Actions가 받아 PDF로 만든 뒤 uploadBulletin으로 올림 */
