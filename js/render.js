@@ -15,15 +15,17 @@ function slideHTML(s) {
       return `<div class="sl sl-logo"><img src="${CHURCH.logo}" alt="${esc(CHURCH.name)}"></div>`;
     case "cover":
       return `<div class="sl sl-cover">
-        <img class="cover-logo" src="${CHURCH.logo}" alt="">
+        <img class="cover-logo logo-w" src="${CHURCH.logo}" alt="">
+        <div class="rule"><i></i></div>
         <div class="cover-title fit" data-max="120" data-min="60">${esc(s.title)}</div>
         <div class="cover-sub">${esc(s.subtitle || "")}</div></div>`;
     case "title":
       return `<div class="sl sl-title">
-        <div class="t-section">${esc(s.section || "")}</div>
+        ${s.section && s.section !== s.title ? `<div class="t-section">${esc(s.section)}</div>` : ""}
         <div class="t-main fit" data-max="140" data-min="64">${esc(s.title)}</div>
         ${s.subtitle ? `<div class="t-sub">${esc(s.subtitle)}</div>` : ""}
-        ${s.note ? `<div class="t-note">${esc(s.note)}</div>` : ""}</div>`;
+        ${s.note ? `<div class="t-note">${esc(s.note)}</div>` : ""}
+        <img class="t-sign logo-w" src="${CHURCH.logo}" alt=""></div>`;
     case "text":
       return `<div class="sl sl-text">
         <div class="x-head"><span>${esc(s.title || s.section || "")}</span><span class="x-page">${esc(s.page || "")}</span></div>

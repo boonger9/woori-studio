@@ -57,22 +57,38 @@ button { font: inherit; }
 .stage { position: absolute; left: 50%; top: 50%; transform-origin: center center; overflow: hidden; }
 .sl { width: 100%; height: 100%; display: flex; flex-direction: column; color: #fff; background: var(--navy); }
 .sl-black { background: #000; }
-.sl-logo, .sl-cover { background: #fff; color: var(--navy); align-items: center; justify-content: center; }
-.sl-logo img { width: 62%; }
-.sl-cover { gap: 40px; padding: 80px 120px; }
-.sl-cover .cover-logo { width: 34%; }
-.cover-title { font-weight: 800; text-align: center; max-height: 340px; overflow: hidden; line-height: 1.25; }
-.cover-sub { font-size: 52px; color: var(--muted); }
+/* 예배 화면 공통 바탕: 깊은 밤하늘 남색 + 위에서 내려오는 은은한 빛 */
+.sl-logo, .sl-cover, .sl-title, .sl-text {
+  background:
+    radial-gradient(1300px 760px at 50% -18%, rgba(92, 140, 235, 0.34), transparent 70%),
+    radial-gradient(1000px 520px at 50% 118%, rgba(214, 178, 106, 0.10), transparent 70%),
+    linear-gradient(180deg, #0e1c3a 0%, #0a1429 55%, #070e1d 100%);
+  color: #fff;
+}
+.sl-logo, .sl-cover { align-items: center; justify-content: center; }
+/* 로고는 흰색 한 가지 색으로 (어두운 바탕에서 가장 깔끔) */
+.logo-w { filter: brightness(0) invert(1); }
+.sl-logo img { width: 46%; opacity: 0.96; filter: brightness(0) invert(1) drop-shadow(0 0 28px rgba(140, 180, 255, 0.18)); }
+.sl-cover { gap: 0; padding: 80px 140px; }
+.sl-cover .cover-logo { width: 22%; opacity: 0.92; margin-bottom: 64px; }
+.cover-title { font-weight: 800; text-align: center; max-height: 340px; overflow: hidden; line-height: 1.22; letter-spacing: 0.04em; word-break: keep-all; width: 100%; }
+.cover-sub { font-size: 44px; color: rgba(214, 226, 255, 0.72); letter-spacing: 0.22em; margin-top: 34px; font-weight: 500; }
+.rule { display: flex; align-items: center; gap: 22px; color: #d6b26a; margin: 0 0 46px; }
+.rule::before, .rule::after { content: ""; width: 150px; height: 2px; background: linear-gradient(90deg, transparent, #d6b26a); }
+.rule::after { transform: scaleX(-1); }
+.rule i { width: 12px; height: 12px; background: #d6b26a; transform: rotate(45deg); display: block; }
 
-.sl-title { justify-content: center; align-items: center; text-align: center; padding: 100px 140px; gap: 36px;
-  background: radial-gradient(ellipse at 50% 0%, var(--navy-2), var(--navy) 70%); }
-.t-section { font-size: 44px; letter-spacing: 0.3em; color: #9fc0ff; font-weight: 600; }
-.t-main { font-weight: 800; line-height: 1.25; max-height: 520px; width: 100%; overflow: hidden; word-break: keep-all; }
-.t-sub { font-size: 60px; color: #dbe6ff; }
-.t-note { font-size: 36px; color: #ffd28a; }
+.sl-title { justify-content: center; align-items: center; text-align: center; padding: 100px 150px 120px; gap: 0; position: relative; }
+.t-section { font-size: 36px; letter-spacing: 0.5em; color: #d6b26a; font-weight: 600; display: flex; align-items: center; gap: 26px; margin-bottom: 44px; padding-left: 0.5em; }
+.t-section::before, .t-section::after { content: ""; width: 90px; height: 2px; background: linear-gradient(90deg, transparent, rgba(214, 178, 106, 0.9)); }
+.t-section::after { transform: scaleX(-1); }
+.t-main { font-weight: 800; line-height: 1.25; max-height: 520px; width: 100%; overflow: hidden; word-break: keep-all; letter-spacing: 0.02em; text-shadow: 0 4px 30px rgba(0, 0, 0, 0.35); }
+.t-sub { font-size: 52px; color: rgba(214, 226, 255, 0.8); margin-top: 40px; font-weight: 500; letter-spacing: 0.04em; }
+.t-note { font-size: 36px; color: #ffd28a; margin-top: 30px; }
+.t-sign { position: absolute; bottom: 54px; left: 50%; transform: translateX(-50%); width: 190px; opacity: 0.38; }
 
 .sl-text { padding: 70px 110px 80px; gap: 36px; }
-.x-head { display: flex; justify-content: space-between; font-size: 42px; color: #9fc0ff; font-weight: 700; border-bottom: 3px solid rgba(255,255,255,0.18); padding-bottom: 22px; flex: none; }
+.x-head { display: flex; justify-content: space-between; font-size: 42px; color: #d6b26a; letter-spacing: 0.08em; font-weight: 700; border-bottom: 2px solid rgba(214,178,106,0.35); padding-bottom: 22px; flex: none; }
 .x-page { color: rgba(255,255,255,0.55); font-weight: 500; }
 .x-lines > div { white-space: nowrap; }
 .x-center { text-align: center; align-items: center; }
