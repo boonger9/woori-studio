@@ -40,6 +40,11 @@
       <h2>주간 준비</h2>
       <p>원고 불러오기 → AI 추천(설교 요약·설교 전후 찬송·성시교독) → 묵도기원·첫 찬송·기도자·광고 입력 → 확정하면 예배 슬라이드와 악보가 준비됩니다.</p>
     </a>
+    <a class="card" id="bulletin-card" target="_blank" rel="noopener" hidden>
+      <span class="tag">PC·폰 어디서나</span>
+      <h2>🖨 이번 주 주보 열기 · 인쇄</h2>
+      <p id="bulletin-info">확정할 때 만든 주보 PDF를 엽니다. 폰에서는 열린 화면의 ⋮(더보기) 또는 공유 → <b>인쇄</b>를 누르면 됩니다.</p>
+    </a>
   </div>
 </div>
 
@@ -48,6 +53,16 @@ import { auth, login, logout, isAllowed } from "./js/firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
 const who = document.getElementById("who"), btn = document.getElementById("auth-btn");
+
+// 이번 주 주보 PDF (확정 때 GitHub가 만들어 드라이브에 올린 것)
+fetch("media/manifest.json", { cache: "no-store" }).then((r) => r.json()).then((m) => {
+  const b = m.bulletin;
+  if (!b || !b.ok || !b.url) return;
+  const card = document.getElementById("bulletin-card");
+  card.href = b.url; card.hidden = false;
+  document.getElementById("bulletin-info").innerHTML =
+    `<b>${b.name}</b> — 확정할 때 만든 주보 PDF를 엽니다. 폰에서는 열린 화면의 ⋮(더보기) 또는 공유 → <b>인쇄</b>를 누르면 됩니다.`;
+}).catch(() => {});
 onAuthStateChanged(auth, (user) => {
   btn.hidden = false;
   if (!user) { who.className = "pill"; who.textContent = "로그인 안 됨"; btn.textContent = "Google로 로그인"; btn.onclick = () => login().catch((e) => alert(e.message)); return; }

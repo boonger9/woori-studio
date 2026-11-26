@@ -164,7 +164,7 @@
         <label class="f">주보 호수 (제 ○호) <input type="number" id="b-issue"></label>
         <label class="f">오후 예배 하이델베르크 요리문답 (제 ○주일) <input type="number" id="b-heid" min="1" max="52"></label>
       </div>
-      <div class="row"><button class="btn" id="b-preview">주보 미리보기 (새 창)</button><span class="hint">확정하면 이 모양 그대로 PDF가 만들어져 드라이브 '주보pdf_검토' 폴더에 올라갑니다.</span></div>
+      <div class="row"><button class="btn" id="b-preview">주보 미리보기 (새 창)</button><button class="btn primary" id="b-print">🖨 주보 인쇄</button><span class="hint">확정하면 이 모양 그대로 PDF가 만들어져 드라이브 '주보pdf_검토' 폴더에 올라갑니다.</span></div>
       <details id="b-fixed-box">
         <summary>주보 고정 내용 고치기 (모임 안내 · 일꾼 · 헌금위원 · 기도순서 등, 가끔 바뀌는 것)</summary>
         <div style="display:grid;gap:8px;margin-top:10px">
@@ -197,6 +197,7 @@
       <div class="row">
         <a class="btn" id="b-open" target="_blank" rel="noopener" hidden>① 검토본 PDF 열어 보기</a>
         <button class="btn primary" id="b-publish" hidden>② 홈페이지에 올리기</button>
+        <button class="btn" id="b-print2">🖨 주보 인쇄</button>
       </div>
     </div>
   </div>
@@ -287,12 +288,16 @@ requireLogin($("gate"), async () => {
     catch (e) { $("bf-msg").textContent = "저장 실패: " + e.message; }
   });
   $("bf-reset").onclick = () => { fillFixed(FIXED_DEFAULT); $("bf-msg").textContent = "처음 값으로 바꿨습니다. [고정 내용 저장]을 눌러야 적용됩니다."; };
-  $("b-preview").onclick = () => {
+  // 미리보기·인쇄: 지금 화면 값으로 주보를 그려 새 창에 띄움 (인쇄는 다 그린 뒤 인쇄 창이 바로 뜸)
+  function openBulletin(print) {
     try { localStorage.setItem("woori-studio:bulletin-preview", JSON.stringify(buildBulletinData(collect(), readFixed()))); }
-    catch (e) { return toast("미리보기를 만들지 못했습니다: " + e.message, true); }
-    const win = window.open("bulletin.html", "woori-bulletin");
+    catch (e) { return toast("주보를 만들지 못했습니다: " + e.message, true); }
+    const win = window.open("bulletin.html" + (print ? "?print" : ""), print ? "woori-bulletin-print" : "woori-bulletin");
     if (!win) toast("팝업이 차단되었습니다. 주소창 오른쪽에서 팝업을 허용해 주세요.", true);
-  };
+  }
+  $("b-preview").onclick = () => openBulletin(false);
+  $("b-print").onclick = () => openBulletin(true);
+  $("b-print2").onclick = () => openBulletin(true);
 
   /* ----- 1. 날짜 ----- */
   $("date").value = nextSunday();
