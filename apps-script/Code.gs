@@ -35,6 +35,7 @@ function doPost(e) {
       uploadBulletin: uploadBulletin_, publishBulletin: publishBulletin_, publishSermon: publishSermon_,
       listGospel: listGospel_, getGospelFile: getGospelFile_, getMediaFile: getGospelFile_,
       listSermonArt: listSermonArt_, saveBulletinData: saveBulletinData_, getBulletinData: getBulletinData_,
+      createSchoolDoc: createSchoolDoc_,
       aiGenerate: aiGenerate_, updateWeekly: updateWeekly_, ping: () => ({ ok: true, now: new Date().toISOString() })
     };
     const h = handlers[req.action];
@@ -49,7 +50,7 @@ function doPost(e) {
 // 예배 스튜디오가 지침(system)과 원고(user)를 보내면 Gemini 결과(JSON 글자)를 돌려줍니다.
 // 무료로 쓸 수 있는 Flash 모델을 스스로 찾아 쓰고, 모델이 종료되면 다음 모델로 넘어갑니다.
 
-function aiGenerate_({ system, user }) {
+function aiGenerate_({ system, user, format }) {
   const props = PropertiesService.getScriptProperties();
   const key = props.getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('스크립트 속성에 GEMINI_API_KEY가 없습니다');
@@ -62,7 +63,7 @@ function aiGenerate_({ system, user }) {
       payload: JSON.stringify({
         systemInstruction: { parts: [{ text: system || '' }] },
         contents: [{ role: 'user', parts: [{ text: user }] }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.4 }
+        generationConfig: format === 'text' ? { temperature: 0.5 } : { responseMimeType: 'application/json', temperature: 0.4 }
       })
     });
     const code = res.getResponseCode();
@@ -302,6 +303,37 @@ function publishBulletin_({ date, isPraise }) {
   const file = upsert_(DriveApp.getFolderById(CONFIG.BULLETIN_FOLDER_ID), name, src.next().getBlob().setName(name));
   shareLink_(file);
   return { ok: true, stage: 'published', name, id: file.getId(), url: file.getUrl() };
+}
+
+/*
+ * 다섯째 주(원로목사님 설교) — 설교 원고가 없는 주에 홈페이지 교회학교 자동화가 읽을 문서를 생명의삶 폴더에 만듦.
+ * 이름: YYMMDD_주일낮_본문_제목 (원로목사님 설교)
+ * 내용: [본문](개역개정) · [설교 요지] · [어린이 설교](AI 초안 → 목사님 검토)
+ * 같은 날짜 문서가 이미 있으면 새로 만들지 않고 내용을 바꿔 씀.
+ */
+function createSchoolDoc_({ date, title, passage, passageText, notes, kidSermon }) {
+  if (!title || !passage) throw new Error('설교 제목과 본문이 필요합니다');
+  const yymmdd = toYymmdd_(date);
+  const name = yymmdd + '_주일낮_' + String(passage).replace(/\s+/g, '') + '_' + title + ' (원로목사님 설교)';
+  const root = DriveApp.getFolderById(CONFIG.MANUSCRIPT_ROOT_ID);
+  const found = root.searchFiles("title contains '" + yymmdd + "_주일낮' and title contains '원로목사님 설교' and trashed = false");
+  let doc;
+  if (found.hasNext()) { doc = DocumentApp.openById(found.next().getId()); doc.setName(name); doc.getBody().clear(); }
+  else { doc = DocumentApp.create(name); DriveApp.getFileById(doc.getId()).moveTo(root); }
+  const body = doc.getBody();
+  const H = DocumentApp.ParagraphHeading;
+  body.getParagraphs()[0].setText(title).setHeading(H.TITLE);
+  const note = body.appendParagraph('원로목사님 설교 주일 · 설교 전문 없음 · 설교: 김용원 원로목사 · 예배 스튜디오가 만든 교회학교용 문서');
+  body.appendParagraph('[본문] ' + passage).setHeading(H.HEADING1);
+  String(passageText || '').split('\n').forEach(l => { if (l.trim()) body.appendParagraph(l); });
+  body.appendParagraph('[설교 요지]').setHeading(H.HEADING1);
+  body.appendParagraph(String(notes || '').trim() || '(받은 요지 없음 — 본문을 기준으로 합니다)');
+  body.appendParagraph('[어린이 설교]').setHeading(H.HEADING1);
+  String(kidSermon || '').split('\n').forEach(l => body.appendParagraph(l));
+  body.editAsText().setItalic(false);
+  note.setItalic(true);
+  doc.saveAndClose();
+  return { ok: true, id: doc.getId(), name: name, url: 'https://docs.google.com/document/d/' + doc.getId() + '/edit' };
 }
 
 /* 주보 내용(JSON)을 검토 폴더에 보관 → GitHub Actions가 받아 PDF로 만든 뒤 uploadBulletin으로 올림 */
