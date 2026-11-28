@@ -174,8 +174,9 @@ export function sampleDeck(date) {
     date, title: "주일 낮 예배 (시험용 샘플)",
     items: [
       { section: "예배 전", type: "cover", title: "주일 낮 예배", subtitle: date },
-      { section: "묵도기원", type: "hymn", no: 257, title: "마음에 가득한 의심을 깨치고" },
-      { section: "묵도기원", type: "hymn", no: 259, title: "예수 십자가에 흘린 피로써" },
+      { section: "예배 전 찬양", type: "hymn", no: 257, title: "마음에 가득한 의심을 깨치고" },
+      { section: "예배 전 찬양", type: "hymn", no: 259, title: "예수 십자가에 흘린 피로써" },
+      { section: "묵도기원", type: "title", title: "묵도기원" },
       { section: "찬송", type: "hymn", no: 4, title: "성부 성자와 성령", note: "1절만" },
       { section: "성시교독", type: "responsive", no: 115, title: "구주 강림(1)" },
       { section: "신앙고백", type: "title", title: "신앙고백", subtitle: "사도신경" },

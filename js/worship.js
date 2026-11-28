@@ -140,8 +140,11 @@ const CREED = [
 /** 주일 낮 예배 (8월 2일 주보 순서 기준) */
 function buildSundayItems(w) {
   const items = [{ section: "예배 전", type: "cover", title: "주일 낮 예배", subtitle: koreanDate(w.date) }];
-  (w.prelude || []).filter(Boolean).forEach((n) => items.push(H("묵도기원", n)));
+  // 주보에는 '묵도기원' 옆에 적지만 실제로는 예배 전 찬양 → 두 곡을 부른 뒤 묵도기원
+  (w.prelude || []).filter(Boolean).forEach((n) => items.push(H("예배 전 찬양", n)));
+  items.push({ section: "묵도기원", type: "title", title: "묵도기원" });
   if (w.first && w.first.no) items.push(H("찬송", w.first.no, w.first.firstVerseOnly ? { note: "1절만", firstVerseOnly: true } : {}));
+  if (w.responsive && w.responsive.no) items.push({ section: "성시교독", type: "title", title: "성시교독", subtitle: [`${Number(w.responsive.no)}번`, responsiveTitle(w.responsive.no)].filter(Boolean).join(" · ") });
   if (w.responsive && w.responsive.no) items.push({ section: "성시교독", type: "responsive", no: Number(w.responsive.no), title: responsiveTitle(w.responsive.no) });
   items.push(...CREED);
   if (w.hymnBefore && w.hymnBefore.no) items.push(H("설교 전 찬송", w.hymnBefore.no));

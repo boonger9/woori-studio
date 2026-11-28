@@ -64,8 +64,8 @@ export function contiSections(w) {
     list.filter(([k, , o]) => (k === "hy" ? o && o.no : o && o.id))
       .forEach(([k, label, o], i) => day.push(k === "hy" ? hy(label, o, pair(i)) : gs(label, o, pair(i))));
   } else {
-    // 1쪽: 묵도기원 두 곡 좌우
-    (w.prelude || []).forEach((no, i) => day.push(hy(`묵도기원 ${i + 1}`, { no }, pair(i, 1))));
+    // 1쪽: 예배 전 찬양 두 곡 좌우 (주보에는 묵도기원 옆에 적힘)
+    (w.prelude || []).forEach((no, i) => day.push(hy(`예배 전 찬양 ${i + 1}`, { no }, pair(i, 1))));
     const p = 1 + Math.max(1, Math.ceil((w.prelude || []).length / 2));
     // 2쪽: 왼쪽 위 기도송 631 · 왼쪽 아래 폐회송 / 오른쪽 첫 찬송
     const first = w.first && w.first.firstVerseOnly ? "찬송(1절)" : "찬송";
